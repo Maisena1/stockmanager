@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String
+  role      Role     @default(EMPLOYEE)
+  sales     Sale[]
+  createdAt DateTime @default(now())
+}
+
+model Article {
+  code            String     @id
+  name            String
+  category        String
+  motorcycleModel String
+  purchasePrice   Float
+  salePrice       Float
+  stock           Int
+  minStock        Int
+  supplier        String
+  barcode         String?
+  photo           String?
+  saleItems       SaleItem[]
+}
+
+model Sale {
+  id        Int        @id @default(autoincrement())
+  userId    Int
+  total     Float
+  createdAt DateTime   @default(now())
+  items     SaleItem[]
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model SaleItem {
+  id          Int    @id @default(autoincrement())
+  saleId      Int
+  articleCode String
+  quantity    Int
+  unitPrice   Float
+  total       Float
+
+  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  article Article @relation(fields: [articleCode], references: [code], onDelete: Cascade)
+}

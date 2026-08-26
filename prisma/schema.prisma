@@ -12,6 +12,12 @@ enum Role {
   EMPLOYEE
 }
 
+enum PaymentMethod {
+  EFECTIVO
+  TARJETA
+  TRANSFERENCIA
+}
+
 model User {
   id        Int      @id @default(autoincrement())
   username  String   @unique
@@ -37,11 +43,12 @@ model Article {
 }
 
 model Sale {
-  id        Int        @id @default(autoincrement())
-  userId    Int
-  total     Float
-  createdAt DateTime   @default(now())
-  items     SaleItem[]
+  id            Int           @id @default(autoincrement())
+  userId        Int
+  total         Float
+  paymentMethod PaymentMethod
+  createdAt     DateTime      @default(now())
+  items         SaleItem[]
 
   user User @relation(fields: [userId], references: [id])
 }

@@ -2,6 +2,8 @@ import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import authRoutes from "./routes/auth.routes";
 import articlesRoutes from "./routes/articles.routes";
+import salesRoutes from "./routes/sales.routes";
+import balanceRoutes from "./routes/balance.routes";
 
 const app = express();
 
@@ -14,6 +16,8 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/articles", articlesRoutes);
+app.use("/api/sales", salesRoutes);
+app.use("/api/balance", balanceRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

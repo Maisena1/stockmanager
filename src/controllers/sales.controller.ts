@@ -94,3 +94,17 @@ export async function listSales(_req: Request, res: Response) {
   });
   return res.json(sales);
 }
+
+export async function lowStock(_req: Request, res: Response) {
+  const articles = await prisma.article.findMany({
+    where: { stock: { lte: prisma.article.fields.minStock } },
+    orderBy: { supplier: "asc" },
+  });
+
+  const withShortage = articles.map((a) => ({
+    ...a,
+    shortage: Math.max(a.minStock - a.stock, 0),
+  }));
+
+  return res.json(withShortage);
+}

@@ -2,7 +2,7 @@ import "dotenv/config";
 import os from "os";
 import app from "./app";
 
-const PORT = process.env.PORT || 2060;
+const PORT = Number(process.env.PORT) || 2060;
 
 function getNetworkIP(): string | undefined {
   const nets = os.networkInterfaces();

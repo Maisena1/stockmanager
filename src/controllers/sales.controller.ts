@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
+import { PaymentMethod } from "../generated/prisma/client";
 
 interface SaleItemInput {
   articleCode: string;
@@ -7,12 +8,17 @@ interface SaleItemInput {
 }
 
 export async function createSale(req: Request, res: Response) {
-  const { items } = req.body;
+  const { items, paymentMethod } = req.body;
   const userId = req.user!.userId;
 
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: "Items array is required" });
   }
+
+  if (!paymentMethod || !Object.values(PaymentMethod).includes(paymentMethod)) {
+    return res.status(400).json({ error: "paymentMethod is required: EFECTIVO, TARJETA or TRANSFERENCIA" });
+  }
+  const method = paymentMethod as PaymentMethod;
 
   const normalized: SaleItemInput[] = [];
   for (const item of items) {
@@ -61,6 +67,7 @@ export async function createSale(req: Request, res: Response) {
       data: {
         userId,
         total,
+        paymentMethod: method,
         items: { create: lines },
       },
       include: { items: { include: { article: { select: { name: true } } } } },

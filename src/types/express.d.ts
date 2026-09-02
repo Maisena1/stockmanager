@@ -1,6 +1,5 @@
 export interface AuthPayload {
   userId: number;
-  username: string;
   role: "ADMIN" | "EMPLOYEE";
 }
 

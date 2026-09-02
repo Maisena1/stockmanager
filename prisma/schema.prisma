@@ -21,7 +21,7 @@ enum PaymentMethod {
 model User {
   id        Int      @id @default(autoincrement())
   username  String   @unique
-  password  String
+  code      String
   role      Role     @default(EMPLOYEE)
   sales     Sale[]
   createdAt DateTime @default(now())

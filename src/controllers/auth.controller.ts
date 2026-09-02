@@ -4,31 +4,27 @@ import { signToken } from "../utils/jwt";
 import { comparePassword } from "../utils/hashing";
 
 export async function login(req: Request, res: Response) {
-  const { username, password } = req.body;
+  const { codigo } = req.body;
 
-  if (!username || !password) {
-    return res.status(400).json({ error: "Username and password are required" });
+  if (!codigo || typeof codigo !== "string") {
+    return res.status(400).json({ error: "Codigo is required" });
   }
 
-  const user = await prisma.user.findUnique({ where: { username } });
-  if (!user) {
-    return res.status(401).json({ error: "Invalid credentials" });
+  const users = await prisma.user.findMany();
+  for (const user of users) {
+    if (await comparePassword(codigo, user.code)) {
+      const token = signToken({ userId: user.id, role: user.role });
+      return res.json({ token, role: user.role, username: user.username });
+    }
   }
 
-  const valid = await comparePassword(password, user.password);
-  if (!valid) {
-    return res.status(401).json({ error: "Invalid credentials" });
-  }
-
-  const token = signToken({
-    userId: user.id,
-    username: user.username,
-    role: user.role,
-  });
-
-  return res.json({ token, role: user.role, username: user.username });
+  return res.status(401).json({ error: "Invalid code" });
 }
 
 export async function me(req: Request, res: Response) {
-  return res.json({ role: req.user!.role, username: req.user!.username });
+  const user = await prisma.user.findUnique({ where: { id: req.user!.userId } });
+  if (!user) {
+    return res.status(401).json({ error: "User not found" });
+  }
+  return res.json({ role: user.role, username: user.username });
 }

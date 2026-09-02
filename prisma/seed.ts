@@ -1,25 +1,25 @@
 import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import bcrypt from "bcryptjs";
+import { hashPassword } from "../src/utils/hashing";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  const adminPassword = await bcrypt.hash("admin123", 10);
-  const employeePassword = await bcrypt.hash("empleado123", 10);
+  const adminCode = await hashPassword("admin123");
+  const employeeCode = await hashPassword("empleado123");
 
   await prisma.user.upsert({
     where: { username: "admin" },
-    update: {},
-    create: { username: "admin", password: adminPassword, role: "ADMIN" },
+    update: { code: adminCode },
+    create: { username: "admin", code: adminCode, role: "ADMIN" },
   });
 
   await prisma.user.upsert({
     where: { username: "empleado" },
-    update: {},
-    create: { username: "empleado", password: employeePassword, role: "EMPLOYEE" },
+    update: { code: employeeCode },
+    create: { username: "empleado", code: employeeCode, role: "EMPLOYEE" },
   });
 
   await prisma.article.upsert({

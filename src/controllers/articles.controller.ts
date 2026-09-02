@@ -11,15 +11,15 @@ export async function list(req: Request, res: Response) {
   const where: Record<string, unknown> = {};
   if (typeof q === "string" && q) {
     where.OR = [
-      { name: { contains: q } },
-      { category: { contains: q } },
-      { motorcycleModel: { contains: q } },
-      { barcode: { contains: q } },
+      { name: { contains: q, mode: "insensitive" } },
+      { category: { contains: q, mode: "insensitive" } },
+      { motorcycleModel: { contains: q, mode: "insensitive" } },
+      { barcode: { contains: q, mode: "insensitive" } },
     ];
   }
-  if (typeof name === "string" && name) where.name = { contains: name };
-  if (typeof category === "string" && category) where.category = { contains: category };
-  if (typeof model === "string" && model) where.motorcycleModel = { contains: model };
+  if (typeof name === "string" && name) where.name = { contains: name, mode: "insensitive" };
+  if (typeof category === "string" && category) where.category = { contains: category, mode: "insensitive" };
+  if (typeof model === "string" && model) where.motorcycleModel = { contains: model, mode: "insensitive" };
 
   const articles = await prisma.article.findMany({ where });
   return res.json(articles.map((a) => serializeArticle(a, role)));

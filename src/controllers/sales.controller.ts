@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { PaymentMethod } from "../generated/prisma/client";
+import { serializeArticle } from "../utils/serialize";
 
 interface SaleItemInput {
   articleCode: string;
@@ -102,14 +103,15 @@ export async function listSales(_req: Request, res: Response) {
   return res.json(sales);
 }
 
-export async function lowStock(_req: Request, res: Response) {
+export async function lowStock(req: Request, res: Response) {
+  const role = req.user!.role;
   const articles = await prisma.article.findMany({
     where: { stock: { lte: prisma.article.fields.minStock } },
     orderBy: { supplier: "asc" },
   });
 
   const withShortage = articles.map((a) => ({
-    ...a,
+    ...serializeArticle(a, role),
     shortage: Math.max(a.minStock - a.stock, 0),
   }));
 

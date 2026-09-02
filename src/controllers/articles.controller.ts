@@ -26,7 +26,7 @@ export async function list(req: Request, res: Response) {
 }
 
 export async function getOne(req: Request, res: Response) {
-  const { code } = req.params;
+  const code = String(req.params.code);
   const role = req.user!.role;
 
   const article = await prisma.article.findUnique({ where: { code } });
@@ -71,7 +71,7 @@ export async function create(req: Request, res: Response) {
 }
 
 export async function update(req: Request, res: Response) {
-  const { code } = req.params;
+  const code = String(req.params.code);
   const data = req.body;
 
   const existing = await prisma.article.findUnique({ where: { code } });
@@ -105,7 +105,7 @@ export async function update(req: Request, res: Response) {
 }
 
 export async function remove(req: Request, res: Response) {
-  const { code } = req.params;
+  const code = String(req.params.code);
 
   const existing = await prisma.article.findUnique({ where: { code } });
   if (!existing) {

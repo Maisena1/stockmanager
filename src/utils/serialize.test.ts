@@ -17,7 +17,7 @@ const fullArticle = {
 
 describe("serializeArticle", () => {
   it("returns all fields for ADMIN", () => {
-    const result = serializeArticle(fullArticle, "ADMIN");
+    const result = serializeArticle(fullArticle, "ADMIN") as typeof fullArticle;
     expect(result).toEqual(fullArticle);
     expect(result.purchasePrice).toBe(2500);
     expect(result.minStock).toBe(10);

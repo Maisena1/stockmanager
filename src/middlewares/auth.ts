@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyToken } from "../utils/jwt";
 import { AuthPayload } from "../types/express";
+import { validateAdminJti , clearAdminSession, getAdminSession } from "../lib/sessions";
 
 export function authenticate(
   req: Request,
@@ -13,9 +14,20 @@ export function authenticate(
   }
 
   const token = header.split(" ")[1];
-
-  try {
+try {
     const payload = verifyToken(token) as AuthPayload;
+
+    if (payload.role === "ADMIN") {
+      if (!validateAdminJti(payload.jti)) {
+        return res.status(401).json({ error: "Admin session expired or revoked" });
+      }
+      const session = getAdminSession();
+      if (session && payload.userId !== session.userId) {
+        clearAdminSession();
+        return res.status(401).json({ error: "Admin session expired or revoked" });
+      }
+    }
+
     req.user = payload;
     next();
   } catch {

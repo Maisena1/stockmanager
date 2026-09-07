@@ -3,6 +3,9 @@ import { prisma } from "../lib/prisma";
 import { serializeArticle } from "../utils/serialize";
 import { calculateSalePrice } from "../utils/precio";
 import { generateCode } from "../utils/codigo";
+import fs from "node:fs";
+import path from "node:path";
+
 
 export async function list(req: Request, res: Response) {
   const { q, name, category, model } = req.query;
@@ -114,4 +117,47 @@ export async function remove(req: Request, res: Response) {
 
   await prisma.article.delete({ where: { code } });
   return res.status(204).send();
+}
+
+const UPLOADS_DIR = path.resolve(process.cwd(),"uploads");
+
+function deleteFileSafe(filename: string | null | undefined) {
+  if (!filename) return;
+  try {
+    const full = path.resolve(UPLOADS_DIR, path.basename(filename));
+    if (full.startsWith(UPLOADS_DIR) && fs.existsSync(full)) fs.unlinkSync(full);
+  } catch {
+
+  }
+}
+
+export async function setPhoto(req: Request, res: Response) {
+  const code = String(req.params.code);
+  const existing = await prisma.article.findUnique({ where: { code } });
+  if (!existing) {
+    if (req.file) deleteFileSafe(req.file.filename);
+    return res.status(404).json({ error: "Article not found" });
+  }
+  if (!req.file) {
+    return res.status(400).json({ error: "Foto requerida" });
+  }
+  deleteFileSafe(existing.photo);
+  const article = await prisma.article.update({
+    where: { code },
+    data: { photo: req.file.filename },
+  });
+  return res.json(article);
+}
+
+export async function removePhoto(req: Request, res:Response) {
+  const code = String(req.params.code);
+  const existing = await prisma.article.findUnique({ where: { code }});
+  if (!existing) {
+    return res.status(404).json({ error: "ARTICLE NOT FOUND"});
+  }
+  deleteFileSafe(existing.photo);
+  const article = await prisma.article.update({
+    where: {code}, data: {photo: null}
+  });
+  return res.json(article);
 }

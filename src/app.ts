@@ -4,7 +4,7 @@ import authRoutes from "./routes/auth.routes";
 import articlesRoutes from "./routes/articles.routes";
 import salesRoutes from "./routes/sales.routes";
 import balanceRoutes from "./routes/balance.routes";
-
+import path from "node:path";
 const app = express();
 
 app.use(cors());
@@ -19,8 +19,10 @@ app.use("/api/articles", articlesRoutes);
 app.use("/api/sales", salesRoutes);
 app.use("/api/balance", balanceRoutes);
 
+app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 app.use(notFound);
 app.use(errorHandler);
+
 
 function notFound(_req: Request, res: Response) {
   res.status(404).json({ error: "Not found" });

@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { PaymentMethod } from "../generated/prisma/client";
 import { serializeArticle } from "../utils/serialize";
+import { parseLocalDate, endOfLocalDay } from "../utils/balance";
+
 
 interface SaleItemInput {
   articleCode: string;
@@ -95,15 +97,34 @@ export async function createSale(req: Request, res: Response) {
  });
 }
 
-export async function listSales(_req: Request, res: Response) {
-  const sales = await prisma.sale.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      user: { select: { username: true } },
-      items: { include: { article: { select: { name: true } } } },
-    },
-  });
-  return res.json(sales);
+export async function listSales(req: Request, res: Response) {
+ const role = req.user!.role;
+ const userId = req.user!.userId;
+ const { from, to } = req.query;
+ 
+ const where:Record<string, unknown> = {};
+ if (role === "EMPLOYEE") {
+  where.userId = userId;
+ }
+ if (typeof from === "string" && from) {
+  const parsed = parseLocalDate(from);
+  if (parsed) where.createdAt = { gte: parsed };
+ }
+ if (typeof to === "string" && to) {
+  const parsed = parseLocalDate(to);
+  if (parsed) {
+    where.createdAt = {...(where.createdAt as object), lte: endOfLocalDay(parsed) };
+  }
+ }
+ const sales = await prisma.sale.findMany({
+  where,
+  orderBy: { createdAt: "desc"},
+  include: {
+    user: { select: { username : true } },
+    items: {include: { article: { select: { name:true}}}},
+  },
+ });
+ return res.json(sales);
 }
 
 export async function lowStock(req: Request, res: Response) {

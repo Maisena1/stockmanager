@@ -54,13 +54,17 @@ export async function createSale(req: Request, res: Response) {
   });
   const total = lines.reduce((acc, l) => acc + l.total, 0);
 
-  const warnings: string[] = [];
-  for (const l of lines) {
+  const insufficient = lines.map((l)=>{
     const a = byCode.get(l.articleCode)!;
-    const remaining = a.stock - l.quantity;
-    if (remaining < 0) {
-      warnings.push(`${a.name}: insufficient stock (goes to ${remaining})`);
-    }
+    return { name: a.name, code: a.code, available: a.stock, requested: l.quantity};
+  })
+  .filter((i)=> i.requested > i.available);
+
+  if (insufficient.length > 0) {
+  const detail = insufficient
+  .map((i)=> `${i.name} (${i.code}): disponible ${i.available}, pedido ${i.requested}`)   
+  .join("; ");
+  return res.status(400).json({ error : `Stock Insuficiente: ${detail}`});
   }
 
   const sale = await prisma.$transaction(async (tx) => {
@@ -84,12 +88,11 @@ export async function createSale(req: Request, res: Response) {
     return created;
   });
 
-  return res.status(201).json({
-    sale,
-    total,
-    articlesCount: sale.items.length,
-    ...(warnings.length ? { warnings } : {}),
-  });
+ return res.status(201).json({
+  sale,
+  total,
+  articlesCount: sale.items.length,
+ });
 }
 
 export async function listSales(_req: Request, res: Response) {

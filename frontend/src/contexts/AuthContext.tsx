@@ -12,7 +12,7 @@ interface AuthContextValue {
   user: User | null
   token: string | null
   loading: boolean
-  login: (codigo: string) => Promise<void>
+  login: (codigo: string) => Promise<Role>
   logout: () => Promise<void>
 }
 
@@ -59,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(res.token)
     setTokenState(res.token)
     setUser({ role: res.role, username: res.username })
+    return res.role
   }
 
   async function logout() {

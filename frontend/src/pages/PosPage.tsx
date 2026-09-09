@@ -52,6 +52,25 @@ export default function PosPage() {
       .catch(() => setResults([]))
   }, [debouncedQuery])
 
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "F2") {
+        e.preventDefault()
+        searchRef.current?.focus()
+      } else if (e.key === "F5") {
+        e.preventDefault()
+        confirmSale()
+      } else if (e.key === "F8") {
+        e.preventDefault()
+        clearCart()
+      } else if (e.key === "Escape") {
+        searchRef.current?.blur()
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  })
+
   function addToCart(article: Article) {
     setCart((prev) => {
       const existing = prev.find((l) => l.code === article.code)
@@ -84,8 +103,21 @@ export default function PosPage() {
     setCart((prev) => prev.filter((l) => l.code !== code))
   }
 
+  function clearCart() {
+    setCart([])
+    setPaymentMethod(null)
+    setSaleError(null)
+    setSummary(null)
+  }
+
+  const overStock = cart.some((l) => l.quantity > l.stock)
+
   async function confirmSale() {
     if (!paymentMethod) return
+    if (overStock) {
+      setSaleError("Hay artículos con cantidad mayor al stock disponible")
+      return
+    }
     setSubmitting(true)
     setSaleError(null)
     try {
@@ -121,6 +153,12 @@ export default function PosPage() {
             ref={searchRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && results.length > 0) {
+                e.preventDefault()
+                addToCart(results[0])
+              }
+            }}
             placeholder="Buscar por código, nombre o código de barras..."
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
@@ -162,8 +200,17 @@ export default function PosPage() {
       </div>
 
       <div className="flex flex-col rounded-lg border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-200 p-3">
+        <div className="flex items-center justify-between border-b border-gray-200 p-3">
           <h2 className="font-bold text-gray-800">Carrito</h2>
+          {cart.length > 0 && (
+            <button
+              type="button"
+              onClick={clearCart}
+              className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
+            >
+              Vaciar carrito
+            </button>
+          )}
         </div>
         <div className="flex-1 overflow-y-auto">
           {cart.length === 0 ? (
@@ -177,12 +224,17 @@ export default function PosPage() {
                   key={l.code}
                   className="flex items-center gap-3 border-b border-gray-100 px-4 py-3"
                 >
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-800">{l.name}</p>
-                    <p className="text-xs text-gray-500">
-                      ${l.unitPrice.toLocaleString("es-AR")} c/u
+<div className="flex-1">
+                  <p className="font-medium text-gray-800">{l.name}</p>
+                  <p className="text-xs text-gray-500">
+                    ${l.unitPrice.toLocaleString("es-AR")} c/u
+                  </p>
+                  {l.quantity > l.stock && (
+                    <p className="text-xs font-medium text-red-600">
+                      Stock disponible: {l.stock}
                     </p>
-                  </div>
+                  )}
+                </div>
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
@@ -274,10 +326,14 @@ export default function PosPage() {
           <button
             type="button"
             onClick={confirmSale}
-            disabled={!paymentMethod || cart.length === 0 || submitting}
+            disabled={!paymentMethod || cart.length === 0 || submitting || overStock}
             className="w-full rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {submitting ? "Confirmando..." : "Confirmar venta"}
+            {submitting
+              ? "Confirmando..."
+              : overStock
+                ? "Corregir stock insuficiente"
+                : "Confirmar venta"}
           </button>
         </div>
       </div>

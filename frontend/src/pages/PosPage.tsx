@@ -17,11 +17,29 @@ interface CartLine {
   stock: number
 }
 
+type PaymentMethod = "EFECTIVO" | "TARJETA" | "TRANSFERENCIA"
+
+const PAYMENT_METHODS: PaymentMethod[] = [
+  "EFECTIVO",
+  "TARJETA",
+  "TRANSFERENCIA",
+]
+
+interface SaleSummary {
+  total: number
+  articlesCount: number
+  paymentMethod: PaymentMethod
+}
+
 export default function PosPage() {
   const [query, setQuery] = useState("")
   const debouncedQuery = useDebounce(query, 300)
   const [results, setResults] = useState<Article[]>([])
   const [cart, setCart] = useState<CartLine[]>([])
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [saleError, setSaleError] = useState<string | null>(null)
+  const [summary, setSummary] = useState<SaleSummary | null>(null)
 
   useEffect(() => {
     if (!debouncedQuery.trim()) {
@@ -64,6 +82,28 @@ export default function PosPage() {
 
   function removeLine(code: string) {
     setCart((prev) => prev.filter((l) => l.code !== code))
+  }
+
+  async function confirmSale() {
+    if (!paymentMethod) return
+    setSubmitting(true)
+    setSaleError(null)
+    try {
+      const res = await api.post<{ total: number; articlesCount: number }>(
+        "/sales",
+        {
+          items: cart.map((l) => ({ articleCode: l.code, quantity: l.quantity })),
+          paymentMethod,
+        },
+      )
+      setSummary({ total: res.total, articlesCount: res.articlesCount, paymentMethod })
+      setCart([])
+      setPaymentMethod(null)
+    } catch (err) {
+      setSaleError(err instanceof Error ? err.message : "Error inesperado")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const total = useMemo(
@@ -196,12 +236,49 @@ export default function PosPage() {
           )}
         </div>
         <div className="border-t border-gray-200 p-3">
-          <div className="flex items-center justify-between">
+          {summary && (
+            <div className="mb-3 rounded-lg bg-green-50 p-3 text-sm text-green-800">
+              <p className="font-semibold">Venta registrada</p>
+              <p>
+                Total: ${summary.total.toLocaleString("es-AR")} —{" "}
+                {summary.articlesCount} artículos — Pago: {summary.paymentMethod}
+              </p>
+            </div>
+          )}
+          {saleError && (
+            <p className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-600">
+              {saleError}
+            </p>
+          )}
+          <select
+            value={paymentMethod ?? ""}
+            onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+            disabled={submitting}
+            className="mb-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 outline-none focus:border-blue-500"
+          >
+            <option value="" disabled>
+              Seleccioná el tipo de pago
+            </option>
+            {PAYMENT_METHODS.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+          <div className="mb-3 flex items-center justify-between">
             <span className="text-sm text-gray-600">Total</span>
             <span className="text-xl font-bold text-gray-800">
               ${total.toLocaleString("es-AR")}
             </span>
           </div>
+          <button
+            type="button"
+            onClick={confirmSale}
+            disabled={!paymentMethod || cart.length === 0 || submitting}
+            className="w-full rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {submitting ? "Confirmando..." : "Confirmar venta"}
+          </button>
         </div>
       </div>
     </div>

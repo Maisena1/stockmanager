@@ -11,6 +11,7 @@ interface User {
 interface AuthContextValue {
   user: User | null
   token: string | null
+  loginAt: number | null
   loading: boolean
   login: (codigo: string) => Promise<Role>
   logout: () => Promise<void>
@@ -27,6 +28,7 @@ interface LoginResponse {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [token, setTokenState] = useState<string | null>(getToken())
+  const [loginAt, setLoginAt] = useState<number | null>(null)
   const [loading, setLoading] = useState(Boolean(getToken()))
 
   useEffect(() => {
@@ -59,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(res.token)
     setTokenState(res.token)
     setUser({ role: res.role, username: res.username })
+    setLoginAt(res.role === "ADMIN" ? Date.now() : null)
     return res.role
   }
 
@@ -71,10 +74,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null)
     setTokenState(null)
     setUser(null)
+    setLoginAt(null)
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, token, loginAt, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   )

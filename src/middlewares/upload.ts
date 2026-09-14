@@ -32,6 +32,8 @@ const storage = multer.diskStorage({
     },
 });
 
+const storageExcel = multer.memoryStorage();
+
 function fileFilter(
     _req: Express.Request,
     file: Express.Multer.File,
@@ -46,6 +48,31 @@ export const uploadSinglePhoto = multer({
     fileFilter,
     limits: { fileSize: MAX_BYTES},
 }).single("photo");
+
+export const uploadExcel = multer({
+    storage: storageExcel,
+    fileFilter: (_req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const isExcel = file.mimetype === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" || ext === ".xlsx";
+        if (isExcel) return cb(null, true);
+        cb(new Error("Solo se permiten archivos .xlsx"));
+    },
+    limits: { fileSize: MAX_BYTES },
+}).single("file");
+
+export function uploadExcelPhoto(req: Request, res: Response, next: NextFunction): void {
+    uploadExcel(req, res, (err) => {
+        if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+            res.status(400).json({ error: "El archivo supera el límite de 50 MB" });
+            return;
+        }
+        if (err) {
+            res.status(400).json({ error: err.message });
+            return;
+        }
+        next();
+    });
+}
 
 export function uploadPhoto(req:Request, res:Response, next:NextFunction):void {
     uploadSinglePhoto(req,res, (err)=> {

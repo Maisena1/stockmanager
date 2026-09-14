@@ -48,6 +48,9 @@ export function Layout() {
       <NavLink to="/history" className={navClass}>
         Historial
       </NavLink>
+      <NavLink to="/quicksale" className={navClass}>
+        Venta Rapida
+      </NavLink>
       {user?.role === "ADMIN" && (
         <NavLink to="/import" className={navClass}>
           Importar

@@ -7,6 +7,7 @@ const UPLOADS_DIR = path.resolve(process.cwd(),"uploads");
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_XLSX_BYTES = 1024 * 1024 * 1024;
 
 const EXT_BY_MIME: Record<string, string> = {
     "image/jpeg": ".jpg",
@@ -49,7 +50,7 @@ export const uploadSinglePhoto = multer({
     limits: { fileSize: MAX_BYTES},
 }).single("photo");
 
-export const uploadExcel = multer({
+export const uploadExcelMulter = multer({
     storage: storageExcel,
     fileFilter: (_req, file, cb) => {
         const ext = path.extname(file.originalname).toLowerCase();
@@ -57,13 +58,13 @@ export const uploadExcel = multer({
         if (isExcel) return cb(null, true);
         cb(new Error("Solo se permiten archivos .xlsx"));
     },
-    limits: { fileSize: MAX_BYTES },
+    limits: { fileSize: MAX_XLSX_BYTES },
 }).single("file");
 
-export function uploadExcelPhoto(req: Request, res: Response, next: NextFunction): void {
-    uploadExcel(req, res, (err) => {
+export function uploadExcel(req: Request, res: Response, next: NextFunction): void {
+    uploadExcelMulter(req, res, (err) => {
         if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
-            res.status(400).json({ error: "El archivo supera el límite de 50 MB" });
+            res.status(400).json({ error: "El archivo supera el límite de 100 MB" });
             return;
         }
         if (err) {

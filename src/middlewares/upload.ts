@@ -6,7 +6,8 @@ import type { Request, Response, NextFunction } from "express";
 const UPLOADS_DIR = path.resolve(process.cwd(),"uploads");
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_MB = 10;
+const MAX_BYTES = MAX_MB * 1024 * 1024;
 
 const EXT_BY_MIME: Record<string, string> = {
     "image/jpeg": ".jpg",
@@ -63,7 +64,7 @@ export const uploadExcel = multer({
 export function uploadExcelPhoto(req: Request, res: Response, next: NextFunction): void {
     uploadExcel(req, res, (err) => {
         if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
-            res.status(400).json({ error: "El archivo supera el límite de 50 MB" });
+            res.status(400).json({ error: `El archivo supera el límite de ${MAX_MB} MB` });
             return;
         }
         if (err) {
@@ -77,7 +78,7 @@ export function uploadExcelPhoto(req: Request, res: Response, next: NextFunction
 export function uploadPhoto(req:Request, res:Response, next:NextFunction):void {
     uploadSinglePhoto(req,res, (err)=> {
         if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
-            res.status(400).json({ error: "La foto supera el limite de 10 MB"});
+            res.status(400).json({ error: `La foto supera el limite de ${MAX_MB} MB`});
             return;
         }
         if (err) {

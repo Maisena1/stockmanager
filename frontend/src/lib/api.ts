@@ -14,18 +14,27 @@ export function setToken(token: string | null) {
 
 export class ApiError extends Error {
   status: number
+  body: unknown
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, body: unknown = undefined) {
     super(message)
     this.status = status
+    this.body = body
   }
+}
+
+function isFormData(body: unknown): body is FormData {
+  return typeof FormData !== "undefined" && body instanceof FormData
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(options.headers as Record<string, string>),
+  const headers: Record<string, string> = { ...(options.headers as Record<string, string>) }
+
+  // Con FormData el Content-Type lo tiene que poner el browser: si lo forzamos
+  // a application/json se pierde el boundary y multer no parsea el archivo.
+  if (!isFormData(options.body)) {
+    headers["Content-Type"] = "application/json"
   }
   if (token) {
     headers.Authorization = `Bearer ${token}`
@@ -43,13 +52,15 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     let message = "Error inesperado"
+    let body: unknown
     try {
-      const body = await res.json()
-      if (body?.error) message = body.error
+      body = await res.json()
+      const parsed = body as { error?: string } | null
+      if (parsed?.error) message = parsed.error
     } catch {
       /* ignore */
     }
-    throw new ApiError(message, res.status)
+    throw new ApiError(message, res.status, body)
   }
 
   if (res.status === 204) return undefined as T
@@ -63,4 +74,7 @@ export const api = {
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "PUT", body: JSON.stringify(body ?? {}) }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  /** multipart/form-data: config y sheets deben ir antes de file (multer). */
+  upload: <T>(path: string, form: FormData) =>
+    request<T>(path, { method: "POST", body: form }),
 }

@@ -29,6 +29,7 @@ export interface ImportConfig {
   percentage: number
   useExcelPrice: boolean
   includeZeroRows: boolean
+  omitirFilasSinNombre: boolean
   minStock: number
   defaultQuantity: number
   existing: ExistingPolicy
@@ -70,7 +71,7 @@ export interface ImportResponse {
   skipped?: SkippedRow[]
 }
 
-/** Debe coincidir con MAX_MB de src/middlewares/upload.ts. */
+/** Debe coincidir con MAX_XLSX_MB de src/middlewares/upload.ts. */
 export const MAX_UPLOAD_MB = 10000
 
 export const COLUMN_FIELDS: Array<{ field: ColumnField; label: string; required: boolean }> = [
@@ -142,7 +143,7 @@ const HEADER_PATTERNS: Array<[ColumnField, RegExp]> = [
   ["name", /^(nombre|descripci|art[íi]culo|producto|item|name)/i],
   ["category", /^(categor)/i],
   ["motorcycleModel", /^(modelo|moto)/i],
-  ["salePrice", /^(precio\s*(de\s*)?venta|venta|valor\s*venta|sale)/i],
+  ["salePrice", /^(precio\s*(de\s*)?venta|venta|valor\s*venta|sale|pvp)/i],
   ["purchasePrice", /^(costo|coste|compra|precio(\s*unit)?|purchase)/i],
   ["stock", /^(stock|existencia|cantidad|qty|quantity)/i],
 ]

@@ -20,6 +20,7 @@ export interface ImportSettings {
   percentage: number;
   useExcelPrice: boolean;
   includeZeroRows: boolean;
+  omitirFilasSinNombre: boolean;
   minStock: number;
   defaultQuantity: number;
   columns: ImportColumns;
@@ -252,6 +253,7 @@ export function parseSettings(input: unknown): SettingsParseResult {
       percentage,
       useExcelPrice,
       includeZeroRows: toBoolean(source.includeZeroRows, false),
+      omitirFilasSinNombre: toBoolean(source.omitirFilasSinNombre, true),
       minStock: minStock ?? 0,
       defaultQuantity: defaultQuantity ?? 1,
       columns,
@@ -272,6 +274,30 @@ function cellText(row: unknown[], index: number | null | undefined): string {
 
 function cellNumber(row: unknown[], index: number | null | undefined): number | null {
   return index === null || index === undefined ? null : toNumber(cell(row, index));
+}
+
+/**
+ * ¿La fila tiene algo en las columnas que importan? Las listas de precios de
+ * los proveedores dejan muchas filas de continuación (talles, accesorios) con
+ * todo vacío salvo el texto del producto de arriba. No son un error de datos,
+ * son filas sin nada que importar.
+ */
+function hasMappedData(row: unknown[], columns: ImportColumns): boolean {
+  const indexes = [
+    columns.code,
+    columns.name,
+    columns.purchasePrice,
+    columns.salePrice,
+    columns.stock,
+  ];
+  return indexes.some((index) => {
+    if (index === null || index === undefined) return false;
+    const value = cell(row, index);
+    if (value === undefined || value === null) return false;
+    // Un 0 explícito es un dato: lo descarta después la regla de precio 0.
+    if (typeof value === "string") return value.trim() !== "";
+    return true;
+  });
 }
 
 /**
@@ -323,9 +349,22 @@ export function buildPlan(
       if (!Array.isArray(source) || source.length === 0) continue;
       const rowNumber = i + 1;
 
+      // Va antes de validar el nombre: una fila totalmente vacía en las columnas
+      // mapeadas se omite, no se reporta como error. Si fuera error, el todo o
+      // nada de RNF-30 cancelaría la importación entera por basura del proveedor.
+      if (!hasMappedData(source, settings.columns)) {
+        plan.skipped.push({ sheet: sheet.name, row: rowNumber, reason: "Fila sin datos" });
+        continue;
+      }
+
       const name = cellText(source, settings.columns.name);
       if (!name) {
-        plan.errors.push({ sheet: sheet.name, row: rowNumber, message: "Falta el nombre del artículo" });
+        const message = "Falta el nombre del artículo";
+        if (settings.omitirFilasSinNombre) {
+          plan.skipped.push({ sheet: sheet.name, row: rowNumber, reason: message });
+        } else {
+          plan.errors.push({ sheet: sheet.name, row: rowNumber, message });
+        }
         continue;
       }
 

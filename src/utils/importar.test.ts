@@ -17,6 +17,7 @@ function settings(overrides: Partial<ImportSettings> = {}): ImportSettings {
     percentage: 50,
     useExcelPrice: false,
     includeZeroRows: false,
+    omitirFilasSinNombre: false,
     minStock: 5,
     defaultQuantity: 1,
     columns: {
@@ -76,6 +77,19 @@ describe("parseSettings", () => {
     expect(result.settings.minStock).toBe(0);
     expect(result.settings.defaultQuantity).toBe(1);
     expect(result.settings.hasHeader).toBe(true);
+  });
+
+  it("omite filas sin nombre por defecto y respeta el false explícito", () => {
+    const base = { supplier: "Norte", percentage: 30, existing: "skip" };
+    const porDefecto = parseSettings(base);
+    expect(porDefecto.ok).toBe(true);
+    if (!porDefecto.ok) return;
+    expect(porDefecto.settings.omitirFilasSinNombre).toBe(true);
+
+    const estricto = parseSettings({ ...base, omitirFilasSinNombre: false });
+    expect(estricto.ok).toBe(true);
+    if (!estricto.ok) return;
+    expect(estricto.settings.omitirFilasSinNombre).toBe(false);
   });
 
   it("acepta un JSON en string (campo de formulario multipart)", () => {
@@ -308,6 +322,65 @@ describe("buildPlan", () => {
     ]);
   });
 
+  it("omite la fila sin nombre en vez de reportarla como error cuando corresponde", () => {
+    const data: SheetData = {
+      name: "Stock",
+      rows: [["nombre", "categoria", "modelo", "costo", "venta", "stock"], ["", "", "", 100, 100, 1]],
+    };
+    const plan = buildPlan(
+      [data],
+      settings({ omitirFilasSinNombre: true, columns: simpleColumns() }),
+      emptyExisting,
+    );
+    expect(plan.toCreate).toHaveLength(0);
+    expect(plan.errors).toHaveLength(0);
+    expect(plan.skipped).toEqual([
+      { sheet: "Stock", row: 2, reason: "Falta el nombre del artículo" },
+    ]);
+  });
+
+  it("omite las filas de continuación sin datos en vez de|reportarlas como error", () => {
+    // Patrón de las listas de precios: el nombre del producto solo está en la
+    // primera fila y las de abajo (talles, accesorios) vienen vacías.
+    const data: SheetData = {
+      name: "Stock",
+      rows: [
+        ["nombre", "costo", "venta", "stock"],
+        ["Casco LS2", 142800, 214200, null],
+        [null, null, null, null],
+        [null, null, null, null],
+      ],
+    };
+    const plan = buildPlan(
+      [data],
+      settings({ columns: { name: 0, purchasePrice: 1, salePrice: 2, stock: 3 } }),
+      emptyExisting,
+    );
+    expect(plan.toCreate).toHaveLength(1);
+    expect(plan.errors).toHaveLength(0);
+    expect(plan.skipped).toEqual([
+      { sheet: "Stock", row: 3, reason: "Fila sin datos" },
+      { sheet: "Stock", row: 4, reason: "Fila sin datos" },
+    ]);
+  });
+
+  it("sigue reportando error si la fila tiene cantidad pero no nombre", () => {
+    // Con cantidad pero sin nombre el problema es del archivo, no basura del
+    // proveedor: hay algo que importar y el nombre no se puede inferir.
+    const data: SheetData = {
+      name: "Stock",
+      rows: [["nombre", "costo", "venta", "stock"], [null, 142800, 214200, 3]],
+    };
+    const plan = buildPlan(
+      [data],
+      settings({ columns: { name: 0, purchasePrice: 1, salePrice: 2, stock: 3 } }),
+      emptyExisting,
+    );
+    expect(plan.errors).toEqual([
+      { sheet: "Stock", row: 2, message: "Falta el nombre del artículo" },
+    ]);
+  });
+
   it("reporta error por fila con cantidades negativas", () => {
     const data: SheetData = {
       name: "Stock",
@@ -341,7 +414,8 @@ describe("buildPlan", () => {
       emptyExisting,
     );
     expect(plan.toCreate).toHaveLength(1);
-    expect(plan.errors).toHaveLength(1);
+    expect(plan.errors).toHaveLength(0);
+    expect(plan.skipped).toEqual([{ sheet: "Stock", row: 3, reason: "Fila sin datos" }]);
   });
 
   describe("artículos existentes", () => {

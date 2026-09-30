@@ -24,12 +24,19 @@ import type {
 const inputClass = "w-full rounded border border-gray-300 px-3 py-2 text-sm"
 const previewRowLimit = 10
 
+function formatSize(bytes: number): string {
+  return bytes >= 1024 * 1024
+    ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+    : `${(bytes / 1024).toFixed(0)} KB`
+}
+
 const INITIAL_CONFIG: ImportConfig = {
   supplier: "",
   motorcycleModel: "",
   percentage: 50,
   useExcelPrice: false,
   includeZeroRows: false,
+  omitirFilasSinNombre: true,
   minStock: 0,
   defaultQuantity: 1,
   existing: "skip",
@@ -217,7 +224,7 @@ export default function ImportPage() {
           <div className="rounded bg-white p-4 text-sm">
             <strong>{file.name}</strong>
             <span className="ml-2 text-gray-500">
-              {(file.size / 1024).toFixed(0)} KB
+              {formatSize(file.size)}
             </span>
           </div>
 
@@ -381,6 +388,14 @@ export default function ImportPage() {
                   onChange={(e) => setConfig((p) => ({ ...p, includeZeroRows: e.target.checked }))}
                 />
                 Importar artículos con stock 0
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={config.omitirFilasSinNombre}
+                  onChange={(e) => setConfig((p) => ({ ...p, omitirFilasSinNombre: e.target.checked }))}
+                />
+                Omitir filas sin nombre (si no, se cancela toda la importación)
               </label>
             </div>
           </div>

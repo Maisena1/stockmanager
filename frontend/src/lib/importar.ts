@@ -71,7 +71,7 @@ export interface ImportResponse {
 }
 
 /** Debe coincidir con MAX_MB de src/middlewares/upload.ts. */
-export const MAX_UPLOAD_MB = 10
+export const MAX_UPLOAD_MB = 10000
 
 export const COLUMN_FIELDS: Array<{ field: ColumnField; label: string; required: boolean }> = [
   { field: "code", label: "Código", required: false },

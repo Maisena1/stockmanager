@@ -6,9 +6,9 @@ import type { Request, Response, NextFunction } from "express";
 const UPLOADS_DIR = path.resolve(process.cwd(),"uploads");
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-const MAX_MB = 10;
+const MAX_MB = 1024;
 const MAX_BYTES = MAX_MB * 1024 * 1024;
-const MAX_XLSX_MB = 1024;
+const MAX_XLSX_MB = 10000;
 const MAX_XLSX_BYTES = MAX_XLSX_MB * 1024 * 1024;
 
 const EXT_BY_MIME: Record<string, string> = {

@@ -53,6 +53,11 @@ export function Layout() {
           Importar
         </NavLink>
       )}
+      {user?.role === "ADMIN" && (
+        <NavLink to="/audit" className={navClass}>
+          Registro
+        </NavLink>
+      )}
     </>
   )
 

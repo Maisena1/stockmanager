@@ -1,0 +1,16 @@
+-- CreateEnum
+CREATE TYPE "AuditAction" AS ENUM ('VENTA', 'IMPORTACION', 'ARTICULO_CREADO', 'ARTICULO_ACTUALIZADO', 'ARTICULO_ELIMINADO');
+
+-- CreateTable
+CREATE TABLE "AuditLog" (
+    "id" SERIAL NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "action" "AuditAction" NOT NULL,
+    "detail" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id")
+);
+
+-- AddForeignKey
+ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

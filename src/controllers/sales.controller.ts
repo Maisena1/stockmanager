@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma";
 import { PaymentMethod } from "../generated/prisma/client";
 import { serializeArticle } from "../utils/serialize";
 import { parseLocalDate, endOfLocalDay } from "../utils/balance";
+import { logAudit, formatDetailMoney } from "../lib/audit";
 
 
 interface SaleItemInput {
@@ -86,6 +87,19 @@ export async function createSale(req: Request, res: Response) {
         data: { stock: { decrement: l.quantity } },
       });
     }
+
+    // Auditoría dentro de la MISMA transacción: o se registra la venta con su
+    // log, o no se registra ninguno de los dos (RNF-30).
+    await logAudit(tx, {
+      userId,
+      action: "VENTA",
+      detail: [
+        `Venta #${created.id}`,
+        created.items.map((i) => `${i.article.name} x${i.quantity}`).join(", "),
+        `total ${formatDetailMoney(total)}`,
+        method,
+      ].join(" — "),
+    });
 
     return created;
   });

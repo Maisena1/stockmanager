@@ -9,6 +9,7 @@ import PosPage from "./pages/PosPage"
 import HistoryPage from "./pages/HistoryPage"
 import ImportPage from "./pages/ImportPage"
 import AuditPage from "./pages/AuditPage"
+import TurnosPage from "./pages/TurnosPage"
 
 function App() {
   return (
@@ -51,6 +52,7 @@ function App() {
                 </ProtectedRoute>
               }
             />
+            <Route path="/turns" element={<TurnosPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

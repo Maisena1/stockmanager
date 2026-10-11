@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react"
 import { NavLink, Outlet, useNavigate } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
-import { api } from "../lib/api"
+import { api, ApiError } from "../lib/api"
+import { closeTurno, type TurnoConResumen } from "../lib/turns"
+import { TurnoResumenModal } from "./TurnoResumenModal"
 
 function navClass({ isActive }: { isActive: boolean }) {
   return `block px-3 py-2 rounded text-sm font-medium ${
@@ -13,6 +15,10 @@ export function Layout() {
   const { user, loginAt, token, logout } = useAuth()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [confirmarCierre, setConfirmarCierre] = useState(false)
+  const [resumenTurno, setResumenTurno] = useState<TurnoConResumen | null>(null)
+  const [cerrando, setCerrando] = useState(false)
+  const [errorCierre, setErrorCierre] = useState<string | null>(null)
 
   useEffect(() => {
     if (user?.role !== "ADMIN") return
@@ -28,6 +34,20 @@ export function Layout() {
 
   function handleLogout() {
     logout().then(() => navigate("/login"))
+  }
+
+  async function confirmarCerrarTurno() {
+    setCerrando(true)
+    setErrorCierre(null)
+    try {
+      const data = await closeTurno()
+      setConfirmarCierre(false)
+      setResumenTurno(data)
+    } catch (e) {
+      setErrorCierre(e instanceof ApiError ? e.message : "No se pudo cerrar el turno")
+    } finally {
+      setCerrando(false)
+    }
   }
 
   const sessionSince = loginAt
@@ -47,6 +67,9 @@ export function Layout() {
       </NavLink>
       <NavLink to="/history" className={navClass}>
         Historial
+      </NavLink>
+      <NavLink to="/turns" className={navClass}>
+        Turnos
       </NavLink>
       {user?.role === "ADMIN" && (
         <NavLink to="/import" className={navClass}>
@@ -83,6 +106,16 @@ export function Layout() {
                 Sesión activa desde {sessionSince}
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => {
+                setErrorCierre(null)
+                setConfirmarCierre(true)
+              }}
+              className="rounded border border-blue-600 px-3 py-1 text-sm font-medium text-blue-600 hover:bg-blue-50"
+            >
+              Cerrar turno
+            </button>
             <button
               type="button"
               onClick={handleLogout}
@@ -122,6 +155,45 @@ export function Layout() {
       <main className="mx-auto w-full max-w-7xl flex-1 p-4">
         <Outlet />
       </main>
+
+      {confirmarCierre && (
+        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">
+            <h2 className="mb-2 text-lg font-bold text-gray-800">¿Cerrar turno?</h2>
+            <p className="mb-4 text-sm text-gray-600">
+              Se cerrará tu turno actual y se generará un resumen de las ventas y acciones
+              realizadas.
+            </p>
+            {errorCierre && (
+              <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">
+                {errorCierre}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmarCierre(false)}
+                disabled={cerrando}
+                className="flex-1 rounded border border-gray-300 px-4 py-2 text-sm hover:bg-gray-100 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarCerrarTurno}
+                disabled={cerrando}
+                className="flex-1 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {cerrando ? "Cerrando…" : "Cerrar turno"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {resumenTurno && (
+        <TurnoResumenModal data={resumenTurno} onClose={() => setResumenTurno(null)} />
+      )}
     </div>
   )
 }

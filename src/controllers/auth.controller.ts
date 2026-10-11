@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma";
 import { signToken } from "../utils/jwt";
 import { comparePassword } from "../utils/hashing";
 import { ensureAdminSession , clearAdminSession, touchAdminSession } from "../lib/sessions";
+import { ensureTurnoAbierto } from "../lib/turnos";
 
 
 export async function login(req: Request, res: Response) {
@@ -20,9 +21,13 @@ export async function login(req: Request, res: Response) {
         if (!session.ok) {
           return res.status(409).json({ error : "Ya hay una sesión de administrador activa"});
         }
+        // El turno se abre sólo cuando el login termina bien: un admin
+        // rechazado por 409 no debe dejar un turno abierto.
+        await ensureTurnoAbierto(prisma, user.id);
         const token = signToken({ userId: user.id, role: user.role, jti: session.session.jti });
         return res.json({ token, role: user.role, username: user.username });
       }
+      await ensureTurnoAbierto(prisma, user.id);
       const token = signToken({ userId: user.id, role: user.role});
       return res.json({ token, role: user.role, username:user.username});
     }

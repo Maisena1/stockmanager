@@ -8,6 +8,7 @@ import ArticlesPage from "./pages/ArticlesPage"
 import PosPage from "./pages/PosPage"
 import HistoryPage from "./pages/HistoryPage"
 import ImportPage from "./pages/ImportPage"
+import AuditPage from "./pages/AuditPage"
 
 function App() {
   return (
@@ -39,6 +40,14 @@ function App() {
               element={
                 <ProtectedRoute roles={["ADMIN"]}>
                   <ImportPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/audit"
+              element={
+                <ProtectedRoute roles={["ADMIN"]}>
+                  <AuditPage />
                 </ProtectedRoute>
               }
             />

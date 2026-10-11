@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma";
 import { serializeArticle } from "../utils/serialize";
 import { calculateSalePrice } from "../utils/precio";
 import { generateCode } from "../utils/codigo";
+import { logAudit } from "../lib/audit";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -55,19 +56,29 @@ export async function create(req: Request, res: Response) {
   const salePrice = calculateSalePrice(purchasePrice, percentage);
   const code = await generateCode(data.name);
 
-  const article = await prisma.article.create({
-    data: {
-      code,
-      name: data.name,
-      category: data.category,
-      motorcycleModel: data.motorcycleModel,
-      purchasePrice,
-      salePrice,
-      stock: Number(data.stock),
-      minStock: Number(data.minStock),
-      supplier: data.supplier,
-      barcode: data.barcode || null,
-    },
+  const article = await prisma.$transaction(async (tx) => {
+    const created = await tx.article.create({
+      data: {
+        code,
+        name: data.name,
+        category: data.category,
+        motorcycleModel: data.motorcycleModel,
+        purchasePrice,
+        salePrice,
+        stock: Number(data.stock),
+        minStock: Number(data.minStock),
+        supplier: data.supplier,
+        barcode: data.barcode || null,
+      },
+    });
+
+    await logAudit(tx, {
+      userId: req.user!.userId,
+      action: "ARTICULO_CREADO",
+      detail: `Artículo ${created.code} "${created.name}" creado`,
+    });
+
+    return created;
   });
 
   return res.status(201).json(article);
@@ -103,7 +114,19 @@ export async function update(req: Request, res: Response) {
     }
   }
 
-  const article = await prisma.article.update({ where: { code }, data: updateData });
+  const updatedFields = Object.keys(updateData);
+  const article = await prisma.$transaction(async (tx) => {
+    const updated = await tx.article.update({ where: { code }, data: updateData });
+
+    await logAudit(tx, {
+      userId: req.user!.userId,
+      action: "ARTICULO_ACTUALIZADO",
+      detail: `Artículo ${code} "${updated.name}" actualizado (campos: ${updatedFields.join(", ")})`,
+    });
+
+    return updated;
+  });
+
   return res.json(article);
 }
 
@@ -115,7 +138,15 @@ export async function remove(req: Request, res: Response) {
     return res.status(404).json({ error: "Article not found" });
   }
 
-  await prisma.article.delete({ where: { code } });
+  await prisma.$transaction(async (tx) => {
+    await tx.article.delete({ where: { code } });
+
+    await logAudit(tx, {
+      userId: req.user!.userId,
+      action: "ARTICULO_ELIMINADO",
+      detail: `Artículo ${existing.code} "${existing.name}" eliminado`,
+    });
+  });
   return res.status(204).send();
 }
 

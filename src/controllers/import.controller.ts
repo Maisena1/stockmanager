@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { prisma } from "../lib/prisma";
 import { generateCodes } from "../utils/codigo";
 import { normalizeUpperCase } from "../utils/normalizar";
+import { logAudit } from "../lib/audit";
 import {
   buildPlan,
   parseSettings,
@@ -145,6 +146,13 @@ export async function runImport(req: Request, res: Response) {
       await tx.article.update({ where: { code: entry.code }, data: entry.data });
       updated++;
     }
+
+    // Auditoría dentro de la misma transacción de la importación (RNF-30).
+    await logAudit(tx, {
+      userId: req.user!.userId,
+      action: "IMPORTACION",
+      detail: `Importación de Excel: ${created} creado(s), ${updated} actualizado(s), ${plan.skipped.length} salteado(s)`,
+    });
   });
 
   const report: ImportReport = {

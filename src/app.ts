@@ -6,6 +6,7 @@ import salesRoutes from "./routes/sales.routes";
 import balanceRoutes from "./routes/balance.routes";
 import path from "node:path";
 import importRoutes from "./routes/import.routes";
+import auditRoutes from "./routes/audit.routes";
 const app = express();
 
 app.use(cors());
@@ -20,6 +21,7 @@ app.use("/api/articles", articlesRoutes);
 app.use("/api/sales", salesRoutes);
 app.use("/api/balance", balanceRoutes);
 app.use("/api/import", importRoutes);
+app.use("/api/audit", auditRoutes);
 app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 app.use(notFound);
 app.use(errorHandler);

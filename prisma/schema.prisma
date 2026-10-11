@@ -18,13 +18,22 @@ enum PaymentMethod {
   TRANSFERENCIA
 }
 
+enum AuditAction {
+  VENTA
+  IMPORTACION
+  ARTICULO_CREADO
+  ARTICULO_ACTUALIZADO
+  ARTICULO_ELIMINADO
+}
+
 model User {
-  id        Int      @id @default(autoincrement())
-  username  String   @unique
+  id        Int        @id @default(autoincrement())
+  username  String     @unique
   code      String
-  role      Role     @default(EMPLOYEE)
+  role      Role       @default(EMPLOYEE)
   sales     Sale[]
-  createdAt DateTime @default(now())
+  auditLogs AuditLog[]
+  createdAt DateTime   @default(now())
 }
 
 model Article {
@@ -63,4 +72,14 @@ model SaleItem {
 
   sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
   article Article @relation(fields: [articleCode], references: [code], onDelete: Cascade)
+}
+
+model AuditLog {
+  id        Int          @id @default(autoincrement())
+  userId    Int
+  action    AuditAction
+  detail    String
+  createdAt DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id])
 }

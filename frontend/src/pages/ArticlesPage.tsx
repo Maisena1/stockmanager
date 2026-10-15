@@ -24,6 +24,7 @@ export default function ArticlesPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Article | null>(null)
   const [deleting, setDeleting] = useState<Article | null>(null)
+  const lowStockCount = articles.filter(isLowStock).length
 
   useEffect(() => {
     let cancelled = false
@@ -46,9 +47,25 @@ export default function ArticlesPage() {
     }
   }, [debouncedQuery])
 
-  const totalPages = Math.max(1, Math.ceil(articles.length / PAGE_SIZE))
+  const sortedArticles = [...articles].sort((a, b) => {
+    const la = isLowStock(a)
+    const lb = isLowStock(b)
+    if (la && !lb) return -1
+    if (!la && lb) return 1
+    return 0
+  })
+
+  function goToFirstLowStock() {
+    const firstIndex = sortedArticles.findIndex(isLowStock)
+    if (firstIndex === -1) return
+    const newPage = Math.floor(firstIndex / PAGE_SIZE) + 1
+    setPage(newPage)
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  const totalPages = Math.max(1, Math.ceil(sortedArticles.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
-  const visible = articles.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+  const visible = sortedArticles.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
   function openCreate() {
     setEditing(null)
@@ -85,17 +102,28 @@ export default function ArticlesPage() {
         )}
       </div>
 
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => {
-          setQuery(e.target.value)
-          setLoading(true)
-          setError(null)
-        }}
-        placeholder="Buscar por nombre, categoría, modelo o código…"
-        className="mb-4 w-full max-w-md rounded border border-gray-300 px-3 py-2 text-sm"
-      />
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setLoading(true)
+            setError(null)
+          }}
+          placeholder="Buscar por nombre, categoría, modelo o código..."
+          className="w-full max-w-md rounded border border-gray-300 px-3 py-2 text-sm"
+        />
+        {lowStockCount > 0 && (
+          <button
+            type="button"
+            onClick={goToFirstLowStock}
+            className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
+          >
+            Ver {lowStockCount} con bajo stock
+          </button>
+        )}
+      </div>
 
       {loading && <p className="text-sm text-gray-600">Cargando artículos…</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}

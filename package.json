@@ -7,6 +7,8 @@
     "dev": "tsx watch src/index.ts",
     "dev:frontend": "npm --prefix frontend run dev",
     "seed": "tsx prisma/seed.ts",
+    "seed:demo": "tsx prisma/seed.demo.ts",
+    "seed:full": "tsx prisma/seed.full.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "test": "vitest run"

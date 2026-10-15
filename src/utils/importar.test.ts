@@ -30,7 +30,6 @@ function settings(overrides: Partial<ImportSettings> = {}): ImportSettings {
       stock: 6,
       barcode: 7,
     },
-    existing: "skip",
     hasHeader: true,
     ...overrides,
   };
@@ -73,7 +72,6 @@ describe("parseSettings", () => {
     if (!result.ok) return;
     expect(result.settings.supplier).toBe("Norte");
     expect(result.settings.percentage).toBe(40);
-    expect(result.settings.existing).toBe("sumStock");
     expect(result.settings.minStock).toBe(0);
     expect(result.settings.defaultQuantity).toBe(1);
     expect(result.settings.hasHeader).toBe(true);
@@ -133,10 +131,6 @@ describe("parseSettings", () => {
     expect(
       parseSettings({ supplier: "N", percentage: 1, existing: "skip", defaultQuantity: -2 }).ok,
     ).toBe(false);
-  });
-
-  it("rechaza política de artículos existentes desconocida", () => {
-    expect(parseSettings({ supplier: "N", percentage: 10, existing: "borrar" }).ok).toBe(false);
   });
 
   it("rechaza usar precio del Excel sin mapear la columna de venta", () => {
@@ -418,51 +412,76 @@ describe("buildPlan", () => {
     expect(plan.skipped).toEqual([{ sheet: "Stock", row: 3, reason: "Fila sin datos" }]);
   });
 
-  describe("artículos existentes", () => {
-    const existing = new Map<string, ExistingArticle>([
-      ["FIL-001", { code: "FIL-001", stock: 50, purchasePrice: 2500, salePrice: 4000 }],
+  describe("artículos existentes (empareja por nombre)", () => {
+    const byName = new Map<string, ExistingArticle>([
+      ["FILTRO DE ACEITE", { code: "FIL-001", name: "Filtro de aceite", stock: 50, purchasePrice: 2500, salePrice: 4000 }],
     ]);
 
-    it("saltea si el artículo ya existe y la política es skip", () => {
-      const plan = buildPlan([sheet], settings({ existing: "skip" }), existing);
-      expect(plan.toUpdate).toHaveLength(0);
-      expect(plan.skipped[0].reason).toBe("El artículo FIL-001 ya existe");
+    it("actualiza precio y suma stock cuando el nombre coincide", () => {
+      const plan = buildPlan([sheet], settings({ percentage: 100 }), byName);
+      expect(plan.toUpdate).toEqual([
+        {
+          sheet: "Stock",
+          row: 2,
+          name: "Filtro de aceite",
+          code: "FIL-001",
+          data: { purchasePrice: 2500, salePrice: 5000, stock: 60 },
+        },
+      ]);
       expect(plan.toCreate).toHaveLength(1);
     });
 
-    it("suma el stock si la política es sumStock", () => {
-      const plan = buildPlan([sheet], settings({ existing: "sumStock" }), existing);
-      expect(plan.toUpdate).toEqual([
-        { sheet: "Stock", row: 2, name: "Filtro de aceite", code: "FIL-001", data: { stock: 60 } },
-      ]);
-    });
-
-    it("actualiza los precios si la política es updatePrice", () => {
-      const plan = buildPlan([sheet], settings({ existing: "updatePrice", percentage: 100 }), existing);
-      expect(plan.toUpdate[0].data).toEqual({ purchasePrice: 2500, salePrice: 5000 });
-    });
-
-    it("normaliza el código del Excel a mayúsculas", () => {
+    it("ignora el código del Excel y empareja solo por nombre", () => {
       const data: SheetData = {
         name: "Stock",
-        rows: [["codigo", "nombre", "", "", 100, 150, 5, ""], ["fil-001", "Filtro", "", "", 100, 150, 5, ""]],
+        rows: [
+          ["codigo", "nombre", "", "", 100, 150, 5, ""],
+          ["otro-codigo", "Filtro de aceite", "", "", 100, 150, 5, ""],
+        ],
       };
-      const plan = buildPlan(
-        [data],
-        settings({ existing: "sumStock" }),
-        new Map([["FIL-001", { code: "FIL-001", stock: 5, purchasePrice: 100, salePrice: 200 }]]),
-      );
+      const plan = buildPlan([data], settings(), byName);
+      expect(plan.toCreate).toHaveLength(0);
       expect(plan.toUpdate[0].code).toBe("FIL-001");
     });
 
-    it("crea el artículo si el código del Excel no existe en la base", () => {
+    it("acumula precio y stock de varias filas con el mismo nombre", () => {
       const data: SheetData = {
         name: "Stock",
-        rows: [["codigo", "nombre", "", "", 100, 150, 5, ""], ["nuevo-1", "Filtro nuevo", "", "", 100, 150, 5, ""]],
+        rows: [
+          ["codigo", "nombre", "", "", 100, 150, 5, ""],
+          ["x", "Filtro de aceite", "", "", 100, 150, 5, ""],
+          ["y", "Filtro de aceite", "", "", 200, 250, 7, ""],
+        ],
       };
-      const plan = buildPlan([data], settings(), existing);
+      const plan = buildPlan([data], settings(), byName);
+      expect(plan.toUpdate).toHaveLength(1);
+      expect(plan.toUpdate[0].data).toEqual({ purchasePrice: 200, salePrice: 300, stock: 62 });
+    });
+
+    it("empareja aunque el Excel traiga acentos y mayúsculas distintas", () => {
+      const data: SheetData = {
+        name: "Stock",
+        rows: [
+          ["codigo", "nombre", "", "", 100, 150, 5, ""],
+          ["z", "FILTRO DE ACEÍTE", "", "", 100, 150, 5, ""],
+        ],
+      };
+      const plan = buildPlan([data], settings(), byName);
+      expect(plan.toCreate).toHaveLength(0);
+      expect(plan.toUpdate[0].code).toBe("FIL-001");
+    });
+
+    it("crea el artículo cuando el nombre no existe, ignorando el código del Excel", () => {
+      const data: SheetData = {
+        name: "Stock",
+        rows: [
+          ["codigo", "nombre", "", "", 100, 150, 5, ""],
+          ["nuevo-1", "Filtro nuevo", "", "", 100, 150, 5, ""],
+        ],
+      };
+      const plan = buildPlan([data], settings(), byName);
       expect(plan.toCreate).toHaveLength(1);
-      expect(plan.toCreate[0].code).toBe("NUEVO-1");
+      expect(plan.toCreate[0].code).toBeNull();
     });
   });
 
@@ -495,86 +514,23 @@ describe("buildPlan", () => {
     expect(plan.toCreate[2].row.sheet).toBe("Extra");
   });
 
-  // Un código repetido dentro del archivo solía llegar a article.create() dos
-  // veces y reventar con P2002 (HTTP 500). Ahora es un error por fila.
-  const dupHeader = ["codigo", "nombre", "categoria", "modelo", "costo", "venta", "stock", "barcode"];
-
-  it("reporta error por fila cuando un código se repite en el archivo", () => {
+  // Varias filas nuevas con el mismo nombre (aunque traigan códigos distintos en
+  // el Excel, que ahora se ignoran) se fusionan en un solo alta con el stock
+  // sumado, para no chocar con el primary key ni duplicar el artículo.
+  it("fusiona en un solo alta las filas nuevas con el mismo nombre", () => {
     const data: SheetData = {
       name: "Stock",
       rows: [
-        dupHeader,
+        ["codigo", "nombre", "categoria", "modelo", "costo", "venta", "stock", "barcode"],
         ["ACE-001", "Aceite 20W40", "Lubricantes", "Honda CB 190R", 8500, "", 12, ""],
-        ["ACE-001", "Aceite 20W40 reposición", "Lubricantes", "Honda CB 190R", 8500, "", 5, ""],
+        ["ACE-002", "aceite 20w40", "Lubricantes", "Honda CB 190R", 9000, "", 5, ""],
       ],
     };
     const plan = buildPlan([data], settings(), emptyExisting);
-    expect(plan.errors).toEqual([
-      { sheet: "Stock", row: 3, message: "El código ACE-001 aparece más de una vez en el archivo" },
-    ]);
-    // La primera fila sigue en el plan: el error cancela todo, no la deja pasar.
-    expect(plan.toCreate).toHaveLength(1);
-  });
-
-  it("reporta el duplicado aunque la primera fila se haya salteado por existir", () => {
-    const data: SheetData = {
-      name: "Stock",
-      rows: [
-        dupHeader,
-        ["ACE-001", "Aceite 20W40", "Lubricantes", "Honda CB 190R", 8500, "", 12, ""],
-        ["ACE-001", "Aceite 20W40 reposición", "Lubricantes", "Honda CB 190R", 8500, "", 5, ""],
-      ],
-    };
-    const existing = new Map<string, ExistingArticle>([
-      ["ACE-001", { code: "ACE-001", stock: 12, purchasePrice: 8500, salePrice: 13000 }],
-    ]);
-    const plan = buildPlan([data], settings({ existing: "skip" }), existing);
-    expect(plan.skipped).toHaveLength(1);
-    expect(plan.errors).toHaveLength(1);
-    expect(plan.errors[0].message).toBe("El código ACE-001 aparece más de una vez en el archivo");
-    expect(plan.toCreate).toHaveLength(0);
-  });
-
-  it("detecta el duplicado ignorando acentos y mayúsculas", () => {
-    const data: SheetData = {
-      name: "Stock",
-      rows: [
-        dupHeader,
-        ["ACE-1", "Filtro de aceite", "Filtros", "Honda CG 150", 2500, "", 10, ""],
-        ["ace-1", "Filtro de aceite copia", "Filtros", "Honda CG 150", 2500, "", 2, ""],
-      ],
-    };
-    const plan = buildPlan([data], settings(), emptyExisting);
-    expect(plan.errors).toHaveLength(1);
-    expect(plan.errors[0].message).toBe("El código ACE-1 aparece más de una vez en el archivo");
-  });
-
-  it("no marca duplicado cuando el código es distinto", () => {
-    const extra: SheetData = {
-      name: "Extra",
-      rows: [
-        dupHeader,
-        ["ACE-002", "Aceite mineral", "Lubricantes", "Honda CB 190R", 7000, "", 3, ""],
-      ],
-    };
-    const plan = buildPlan([sheet, extra], settings(), emptyExisting);
     expect(plan.errors).toEqual([]);
-    expect(plan.toCreate).toHaveLength(3);
-  });
-
-  it("encuentra el artículo existente aunque el Excel traiga acentos", () => {
-    const data: SheetData = {
-      name: "Stock",
-      rows: [dupHeader, ["aceó-1", "Bujía NGK", "Encendido", "Kawasaki", 3100, "", 30, ""]],
-    };
-    // Así se indexa el mapa en el controller: con normalizeUpperCase, no toUpperCase.
-    const existing = new Map<string, ExistingArticle>([
-      ["ACEO-1", { code: "ACEO-1", stock: 4, purchasePrice: 3000, salePrice: 4500 }],
-    ]);
-    const plan = buildPlan([data], settings({ existing: "skip" }), existing);
-    expect(plan.toCreate).toHaveLength(0);
-    expect(plan.skipped).toHaveLength(1);
-    expect(plan.skipped[0].reason).toBe("El artículo ACEO-1 ya existe");
+    expect(plan.toCreate).toHaveLength(1);
+    expect(plan.toCreate[0].row.stock).toBe(17);
+    expect(plan.toCreate[0].row.purchasePrice).toBe(9000);
   });
 });
 

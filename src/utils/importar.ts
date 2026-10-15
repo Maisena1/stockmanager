@@ -1,8 +1,6 @@
 import { normalizeUpperCase } from "./normalizar";
 import { calculateSalePrice } from "./precio";
 
-export type ExistingPolicy = "sumStock" | "updatePrice" | "skip";
-
 export interface ImportColumns {
   code?: number | null;
   name?: number | null;
@@ -24,7 +22,6 @@ export interface ImportSettings {
   minStock: number;
   defaultQuantity: number;
   columns: ImportColumns;
-  existing: ExistingPolicy;
   hasHeader: boolean;
 }
 
@@ -35,6 +32,7 @@ export interface SheetData {
 
 export interface ExistingArticle {
   code: string;
+  name: string;
   stock: number;
   purchasePrice: number;
   salePrice: number;
@@ -108,8 +106,6 @@ const COLUMN_KEYS: Array<keyof ImportColumns> = [
   "stock",
   "barcode",
 ];
-
-const POLICIES: ExistingPolicy[] = ["sumStock", "updatePrice", "skip"];
 
 export const DEFAULT_COLUMNS: Required<ImportColumns> = {
   code: null,
@@ -224,14 +220,6 @@ export function parseSettings(input: unknown): SettingsParseResult {
     return { ok: false, error: "La cantidad estándar no puede ser negativa" };
   }
 
-  const existing = toText(source.existing) as ExistingPolicy;
-  if (!POLICIES.includes(existing)) {
-    return {
-      ok: false,
-      error: "existing debe ser sumStock, updatePrice o skip",
-    };
-  }
-
   const useExcelPrice = toBoolean(source.useExcelPrice, false);
   const columns = parseColumns(source.columns);
 
@@ -257,7 +245,6 @@ export function parseSettings(input: unknown): SettingsParseResult {
       minStock: minStock ?? 0,
       defaultQuantity: defaultQuantity ?? 1,
       columns,
-      existing,
       hasHeader: toBoolean(source.hasHeader, true),
     },
   };
@@ -335,12 +322,12 @@ export function selectSheets(
 export function buildPlan(
   sheets: SheetData[],
   settings: ImportSettings,
-  existingByCode: Map<string, ExistingArticle>,
+  existingByName: Map<string, ExistingArticle> = new Map(),
 ): ImportPlan {
   const plan: ImportPlan = { toCreate: [], toUpdate: [], skipped: [], errors: [] };
-  // Códigos que ya aparecieron en este archivo. Sin esto, dos filas con el mismo
-  // código llegan a article.create() y chocan con el primary key (P2002, 500).
-  const plannedCodes = new Set<string>();
+  const pendingCreatesByName = new Map<string, ParsedRow>();
+  const pendingCreateStocks = new Map<string, number>();
+  const pendingUpdatesByCode = new Map<string, UpdatePlanEntry>();
 
   for (const sheet of sheets) {
     const start = settings.hasHeader ? 1 : 0;
@@ -391,76 +378,86 @@ export function buildPlan(
         continue;
       }
 
-      const excelCode = cellText(source, settings.columns.code);
-      const code = excelCode ? normalizeUpperCase(excelCode) : null;
-
-      if (code) {
-        if (plannedCodes.has(code)) {
-          plan.errors.push({
-            sheet: sheet.name,
-            row: rowNumber,
-            message: `El código ${code} aparece más de una vez en el archivo`,
-          });
-          continue;
-        }
-        // Se registra antes de decidir create/update/skip: dos filas con el mismo
-        // código es un problema del archivo, sea cual sea la política elegida.
-        plannedCodes.add(code);
-      }
-
+      const nameKey = normalizeUpperCase(name);
       const salePrice =
         settings.useExcelPrice && salePriceValue !== null
           ? salePriceValue
           : calculateSalePrice(purchasePrice, settings.percentage);
 
-      const existingArticle = code ? existingByCode.get(code) : undefined;
-      if (code && existingArticle) {
-        if (settings.existing === "skip") {
-          plan.skipped.push({
+      // El emparejamiento es solo por nombre (normalizado): el código del Excel
+      // se ignora a propósito. Si el nombre ya existe, se actualizan precio y
+      // stock (sumando al que ya tenía) sin crear un duplicado.
+      const existingArticle = existingByName.get(nameKey);
+      if (existingArticle) {
+        const articleCode = normalizeUpperCase(existingArticle.code);
+        const entry = pendingUpdatesByCode.get(articleCode);
+        if (entry) {
+          entry.data.stock = (entry.data.stock ?? existingArticle.stock) + stock;
+          entry.data.purchasePrice = purchasePrice;
+          entry.data.salePrice = salePrice;
+        } else {
+          pendingUpdatesByCode.set(articleCode, {
             sheet: sheet.name,
             row: rowNumber,
-            reason: `El artículo ${code} ya existe`,
+            name,
+            code: articleCode,
+            data: {
+              purchasePrice,
+              salePrice,
+              stock: existingArticle.stock + stock,
+            },
           });
-          continue;
         }
-        const data: UpdatePlanEntry["data"] = {};
-        if (settings.existing === "sumStock") {
-          data.stock = existingArticle.stock + stock;
-        } else {
-          data.purchasePrice = purchasePrice;
-          data.salePrice = salePrice;
-        }
-        plan.toUpdate.push({
-          sheet: sheet.name,
-          row: rowNumber,
-          name,
-          code,
-          data,
-        });
         continue;
       }
 
-      plan.toCreate.push({
-        code,
-        row: {
-          sheet: sheet.name,
-          row: rowNumber,
-          name,
-          code,
-          category: cellText(source, settings.columns.category) || "Sin categoría",
-          motorcycleModel:
-            settings.motorcycleModel ||
-            cellText(source, settings.columns.motorcycleModel) ||
-            "Universal",
-          purchasePrice,
-          salePrice,
-          stock,
-          minStock: settings.minStock,
-          supplier: settings.supplier,
-          barcode: cellText(source, settings.columns.barcode) || null,
-        },
-      });
+      if (pendingCreatesByName.has(nameKey)) {
+        const currentStock = pendingCreateStocks.get(nameKey) || 0;
+        pendingCreateStocks.set(nameKey, currentStock + stock);
+        const pending = pendingCreatesByName.get(nameKey);
+        if (pending) {
+          pending.purchasePrice = purchasePrice;
+          pending.salePrice = salePrice;
+        }
+        continue;
+      }
+
+      const parsedRow: ParsedRow = {
+        sheet: sheet.name,
+        row: rowNumber,
+        name,
+        code: null,
+        category: cellText(source, settings.columns.category) || "Sin categoría",
+        motorcycleModel:
+          settings.motorcycleModel ||
+          cellText(source, settings.columns.motorcycleModel) ||
+          "Universal",
+        purchasePrice,
+        salePrice,
+        stock,
+        minStock: settings.minStock,
+        supplier: settings.supplier,
+        barcode: cellText(source, settings.columns.barcode) || null,
+      };
+
+      pendingCreatesByName.set(nameKey, parsedRow);
+      pendingCreateStocks.set(nameKey, stock);
     }
+  }
+
+  for (const entry of pendingUpdatesByCode.values()) {
+    plan.toUpdate.push(entry);
+  }
+
+  for (const [nameKey, row] of pendingCreatesByName) {
+    const totalStock = pendingCreateStocks.get(nameKey) || row.stock;
+    plan.toCreate.push({
+      code: row.code,
+      row: {
+        ...row,
+        stock: totalStock,
+      },
+    });
   }
 
   return plan;

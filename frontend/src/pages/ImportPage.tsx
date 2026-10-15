@@ -3,7 +3,6 @@ import { ApiError } from "../lib/api"
 import {
   COLUMN_FIELDS,
   DEFAULT_COLUMNS,
-  EXISTING_OPTIONS,
   MAX_UPLOAD_MB,
   guessColumns,
   previewImport,
@@ -14,7 +13,6 @@ import {
 } from "../lib/importar"
 import type {
   ColumnField,
-  ExistingPolicy,
   ImportConfig,
   ImportReport,
   SheetPreview,
@@ -39,7 +37,6 @@ const INITIAL_CONFIG: ImportConfig = {
   omitirFilasSinNombre: true,
   minStock: 0,
   defaultQuantity: 1,
-  existing: "skip",
   hasHeader: true,
   columns: { ...DEFAULT_COLUMNS },
 }
@@ -346,22 +343,10 @@ export default function ImportPage() {
                   className={inputClass}
                 />
               </label>
-              <label className="text-sm">
-                Si el artículo ya existe
-                <select
-                  value={config.existing}
-                  onChange={(e) =>
-                    setConfig((p) => ({ ...p, existing: e.target.value as ExistingPolicy }))
-                  }
-                  className={inputClass}
-                >
-                  {EXISTING_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="text-sm text-gray-600">
+                Si el nombre ya existe, se actualizan el precio y el stock (el stock se suma al
+                que ya tenía). El código del Excel se ignora.
+              </div>
             </div>
 
             <div className="mt-3 flex flex-col gap-2 text-sm">

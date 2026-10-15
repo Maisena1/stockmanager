@@ -1,7 +1,5 @@
 import { api } from "./api"
 
-export type ExistingPolicy = "sumStock" | "updatePrice" | "skip"
-
 export type ColumnField =
   | "code"
   | "name"
@@ -32,7 +30,6 @@ export interface ImportConfig {
   omitirFilasSinNombre: boolean
   minStock: number
   defaultQuantity: number
-  existing: ExistingPolicy
   hasHeader: boolean
   columns: ImportColumns
 }
@@ -95,12 +92,6 @@ export const DEFAULT_COLUMNS: ImportColumns = {
   stock: null,
   barcode: null,
 }
-
-export const EXISTING_OPTIONS: Array<{ value: ExistingPolicy; label: string }> = [
-  { value: "skip", label: "Saltar (no tocar los que ya existen)" },
-  { value: "sumStock", label: "Sumar el stock al que ya existe" },
-  { value: "updatePrice", label: "Actualizar el precio" },
-]
 
 export function previewImport(file: File): Promise<PreviewResponse> {
   const form = new FormData()

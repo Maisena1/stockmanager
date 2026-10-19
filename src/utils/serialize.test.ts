@@ -32,4 +32,23 @@ describe("serializeArticle", () => {
     expect(result).not.toHaveProperty("purchasePrice");
     expect(result).not.toHaveProperty("minStock");
   });
+
+  it("incluye el nombre del proveedor sin exponer sus datos de contacto", () => {
+    const withSupplier = {
+      ...fullArticle,
+      supplierId: 7,
+      supplierInfo: { id: 7, name: "Repuestos Norte", phone: "11 5555-5555" },
+    };
+
+    const admin = serializeArticle(withSupplier, "ADMIN");
+    expect(admin.supplierId).toBe(7);
+    expect(admin.supplierName).toBe("Repuestos Norte");
+    expect(admin).not.toHaveProperty("supplierInfo");
+
+    const employee = serializeArticle(withSupplier, "EMPLOYEE");
+    expect(employee.supplierName).toBe("Repuestos Norte");
+    expect(employee).not.toHaveProperty("supplierInfo");
+    expect(employee).not.toHaveProperty("purchasePrice");
+    expect(employee).not.toHaveProperty("minStock");
+  });
 });

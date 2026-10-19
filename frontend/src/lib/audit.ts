@@ -6,6 +6,9 @@ export type AuditAction =
   | "ARTICULO_CREADO"
   | "ARTICULO_ACTUALIZADO"
   | "ARTICULO_ELIMINADO"
+  | "PROVEEDOR_CREADO"
+  | "PROVEEDOR_ACTUALIZADO"
+  | "PROVEEDOR_ELIMINADO"
 
 export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   VENTA: "Venta",
@@ -13,6 +16,9 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   ARTICULO_CREADO: "Artículo creado",
   ARTICULO_ACTUALIZADO: "Artículo actualizado",
   ARTICULO_ELIMINADO: "Artículo eliminado",
+  PROVEEDOR_CREADO: "Proveedor creado",
+  PROVEEDOR_ACTUALIZADO: "Proveedor actualizado",
+  PROVEEDOR_ELIMINADO: "Proveedor eliminado",
 }
 
 export interface AuditUser {

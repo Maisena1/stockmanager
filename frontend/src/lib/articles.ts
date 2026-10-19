@@ -10,6 +10,8 @@ export interface Article {
   stock: number
   minStock?: number
   supplier: string
+  supplierId?: number | null
+  supplierName?: string | null
   barcode?: string | null
   photo?: string | null
 }
@@ -22,7 +24,7 @@ export interface ArticleInput {
   percentage: number
   stock: number
   minStock: number
-  supplier: string
+  supplierId: number
   barcode?: string
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { api } from "../lib/api"
 import { useDebounce } from "../hooks/useDebounce"
+import { listSupplierOptions, type SupplierOption } from "../lib/suppliers"
 
 interface Article {
   code: string
@@ -34,6 +35,8 @@ interface SaleSummary {
 export default function PosPage() {
   const [query, setQuery] = useState("")
   const debouncedQuery = useDebounce(query, 300)
+  const [supplierId, setSupplierId] = useState("")
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([])
   const [results, setResults] = useState<Article[]>([])
   const [cart, setCart] = useState<CartLine[]>([])
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null)
@@ -42,15 +45,33 @@ export default function PosPage() {
   const [summary, setSummary] = useState<SaleSummary | null>(null)
 
   useEffect(() => {
-    if (!debouncedQuery.trim()) {
+    let cancelled = false
+    listSupplierOptions()
+      .then((data) => {
+        if (!cancelled) setSuppliers(data)
+      })
+      .catch(() => {
+        if (!cancelled) setSuppliers([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    const text = debouncedQuery.trim()
+    if (!text && !supplierId) {
       setResults([])
       return
     }
+    const params = new URLSearchParams()
+    if (text) params.set("q", text)
+    if (supplierId) params.set("supplierId", supplierId)
     api
-      .get<Article[]>(`/articles?q=${encodeURIComponent(debouncedQuery.trim())}`)
+      .get<Article[]>(`/articles?${params.toString()}`)
       .then((data) => setResults(data))
       .catch(() => setResults([]))
-  }, [debouncedQuery])
+  }, [debouncedQuery, supplierId])
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -148,7 +169,19 @@ export default function PosPage() {
   return (
     <div className="grid h-[calc(100vh-120px)] grid-cols-1 gap-4 lg:grid-cols-2">
       <div className="flex flex-col rounded-lg border border-gray-200 bg-white shadow-sm">
-        <div className="border-b border-gray-200 p-3">
+        <div className="flex gap-2 border-b border-gray-200 p-3">
+          <select
+            value={supplierId}
+            onChange={(e) => setSupplierId(e.target.value)}
+            className="w-48 rounded-lg border border-gray-300 px-2 py-2 text-sm text-gray-800 outline-none focus:border-blue-500"
+          >
+            <option value="">Todos los proveedores</option>
+            {suppliers.map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {supplier.name}
+              </option>
+            ))}
+          </select>
           <input
             ref={searchRef}
             value={query}
@@ -160,15 +193,15 @@ export default function PosPage() {
               }
             }}
             placeholder="Buscar por código, nombre o código de barras..."
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
         </div>
         <div className="flex-1 overflow-y-auto">
           {results.length === 0 ? (
             <p className="p-4 text-sm text-gray-500">
-              {debouncedQuery.trim()
+              {debouncedQuery.trim() || supplierId
                 ? "Sin resultados"
-                : "Escribí para buscar artículos"}
+                : "Escribí o elegí un proveedor para buscar artículos"}
             </p>
           ) : (
             <ul>

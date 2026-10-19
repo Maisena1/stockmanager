@@ -10,6 +10,7 @@ import HistoryPage from "./pages/HistoryPage"
 import ImportPage from "./pages/ImportPage"
 import AuditPage from "./pages/AuditPage"
 import TurnosPage from "./pages/TurnosPage"
+import SuppliersPage from "./pages/SuppliersPage"
 
 function App() {
   return (
@@ -53,6 +54,14 @@ function App() {
               }
             />
             <Route path="/turns" element={<TurnosPage />} />
+            <Route
+              path="/suppliers"
+              element={
+                <ProtectedRoute roles={["ADMIN"]}>
+                  <SuppliersPage />
+                </ProtectedRoute>
+              }
+            />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -50,6 +50,7 @@ export async function createSale(req: Request, res: Response) {
     const a = byCode.get(i.articleCode)!;
     return {
       articleCode: a.code,
+      articleName: a.name,
       quantity: i.quantity,
       unitPrice: a.salePrice,
       total: i.quantity * a.salePrice,
@@ -78,7 +79,7 @@ export async function createSale(req: Request, res: Response) {
         paymentMethod: method,
         items: { create: lines },
       },
-      include: { items: { include: { article: { select: { name: true } } } } },
+      include: { items: true },
     });
 
     for (const l of lines) {
@@ -95,7 +96,7 @@ export async function createSale(req: Request, res: Response) {
       action: "VENTA",
       detail: [
         `Venta #${created.id}`,
-        created.items.map((i) => `${i.article.name} x${i.quantity}`).join(", "),
+        created.items.map((i) => `${i.articleName} x${i.quantity}`).join(", "),
         `total ${formatDetailMoney(total)}`,
         method,
       ].join(" — "),
@@ -135,7 +136,7 @@ export async function listSales(req: Request, res: Response) {
   orderBy: { createdAt: "desc"},
   include: {
     user: { select: { username : true } },
-    items: {include: { article: { select: { name:true}}}},
+    items: true,
   },
  });
  return res.json(sales);

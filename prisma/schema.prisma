@@ -24,6 +24,9 @@ enum AuditAction {
   ARTICULO_CREADO
   ARTICULO_ACTUALIZADO
   ARTICULO_ELIMINADO
+  PROVEEDOR_CREADO
+  PROVEEDOR_ACTUALIZADO
+  PROVEEDOR_ELIMINADO
 }
 
 model User {
@@ -37,6 +40,16 @@ model User {
   createdAt DateTime   @default(now())
 }
 
+model Supplier {
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  phone     String?
+  email     String?
+  notes     String?
+  createdAt DateTime  @default(now())
+  articles  Article[]
+}
+
 model Article {
   code            String     @id
   name            String
@@ -47,9 +60,11 @@ model Article {
   stock           Int
   minStock        Int
   supplier        String
-  barcode         String?
+  supplierId      Int?
+  barcode         String?    @unique
   photo           String?
   saleItems       SaleItem[]
+  supplierInfo    Supplier?  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
 }
 
 model Sale {
@@ -64,15 +79,18 @@ model Sale {
 }
 
 model SaleItem {
-  id          Int    @id @default(autoincrement())
+  id          Int     @id @default(autoincrement())
   saleId      Int
-  articleCode String
+  articleCode String?
+  articleName String
   quantity    Int
   unitPrice   Float
   total       Float
 
-  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  article Article @relation(fields: [articleCode], references: [code], onDelete: Cascade)
+  sale    Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  // Snapshot histórico: si el artículo se elimina, la línea de venta se
+  // conserva con su nombre y articleCode queda en null.
+  article Article? @relation(fields: [articleCode], references: [code], onDelete: SetNull)
 }
 
 model AuditLog {

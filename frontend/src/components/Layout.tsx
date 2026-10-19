@@ -72,6 +72,11 @@ export function Layout() {
         Turnos
       </NavLink>
       {user?.role === "ADMIN" && (
+        <NavLink to="/suppliers" className={navClass}>
+          Proveedores
+        </NavLink>
+      )}
+      {user?.role === "ADMIN" && (
         <NavLink to="/import" className={navClass}>
           Importar
         </NavLink>

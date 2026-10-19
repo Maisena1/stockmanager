@@ -62,3 +62,8 @@ void {
     if (!adminSession) return;
     if (jti === undefined || adminSession.jti === jti) adminSession = null;
 }
+
+/** Invalida la sesión en memoria cuando su usuario es desactivado o pierde el rol admin. */
+export function invalidateUserSession(userId: number): void {
+    if (adminSession && adminSession.userId === userId) adminSession = null;
+}

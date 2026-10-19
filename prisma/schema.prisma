@@ -24,6 +24,10 @@ enum AuditAction {
   ARTICULO_CREADO
   ARTICULO_ACTUALIZADO
   ARTICULO_ELIMINADO
+  USUARIO_CREADO
+  USUARIO_ACTUALIZADO
+  USUARIO_DESHABILITADO
+  CODIGO_RESETEADO
 }
 
 model User {
@@ -31,6 +35,9 @@ model User {
   username  String     @unique
   code      String
   role      Role       @default(EMPLOYEE)
+  active    Boolean    @default(true)
+  phone     String?
+  notes     String?
   sales     Sale[]
   auditLogs AuditLog[]
   turnos    Turno[]

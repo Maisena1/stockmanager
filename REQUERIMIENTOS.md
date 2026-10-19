@@ -145,6 +145,24 @@ Prioridades: **A** = debe estar (Must), **B** = debería estar (Should), **C** =
 | RF-63 | Balance del día y por rango: total facturado y desglose por tipo de pago (extender `balance.controller` existente) | A |
 | RF-64 | Ver historial: admin ve todas las ventas tanto las suyas como la de los empleados; empleado solo sus propias ventas | B |
 
+### E8 — Mejoras post defensa (octubre 2026)
+
+> Solicitudes del docente tras la defensa. Solo agregan sobre lo ya entregado; ninguna
+> cambia el flujo de login por código único ni la importación por artículos.
+
+| ID | Requisito | Prioridad |
+|---|---|---|
+| RF-70 | Crear usuarios desde el admin (`POST /api/users`, solo ADMIN). Cada usuario tiene `id` autoincremental único que se conserva **siempre**, incluso después de la baja: la baja es lógica (`active = false`), nunca se borra la fila, para no perder el historial de ventas ni de auditoría | A |
+| RF-71 | El admin puede resetear el código de acceso de un usuario; el usuario desactivado no puede autenticarse (401) y su sesión activa se invalida | A |
+| RF-72 | CRUD completo de proveedores (`GET/POST/PATCH/DELETE /api/suppliers`, solo ADMIN) sobre la entidad `Supplier`, con contacto y notas. Al eliminar un proveedor se eliminan también sus artículos (cascada) | A |
+| RF-73 | Los artículos se asocian a un proveedor por FK (`Article.supplierId`), no por texto libre. La migración backfillea los proveedores distintos que ya están en `Article.supplier` | A |
+| RF-74 | Filtrado de artículos por proveedor y por fecha de modificación (`Article.updatedAt`): filtros `supplierId`, `updatedFrom`, `updatedTo`, `lowStock` y orden por modificación descendente | B |
+| RF-75 | Control de importaciones duplicadas: se registra cada importación (archivo, peso, usuario, fecha, reporte). Si el mismo archivo —mismo nombre y mismo peso— se vuelve a subir dentro del cooldown configurable (`IMPORT_DUP_COOLDOWN_MIN`, default 30 min) el sistema responde 409 con aviso accionable y exige confirmación explícita para continuar. Mismo nombre con **otro** peso se interpreta como pedido nuevo y pasa sin aviso | A |
+| RF-76 | Módulo de reportes con 4 reportes: ventas (rango, vendedor, tipo de pago), productos más vendidos con margen estimado, artículos bajo stock agrupados por proveedor, y compras por proveedor. Todos con filtros combinables y paginación; módulo completo solo para ADMIN | A |
+| RF-77 | Vista online del reporte en pantalla (pestañas por reporte, tarjetas de indicadores, barras de top productos, tablas), optimizada para monitor de escritorio | B |
+| RF-78 | Exportación de reportes a XLSX (reutilizando la librería `xlsx` ya instalada en el backend) y a PDF vía impresión del navegador (`window.print()` + CSS `@media print`), sin dependencias nuevas | B |
+| RF-79 | Navegación y permisos diferenciados por rol: el empleado no accede a Proveedores, Reportes, Importar ni Auditoría; el admin sí | B |
+
 ---
 
 ## 5. Requisitos no funcionales (RNF)
@@ -190,6 +208,7 @@ Prioridades: **A** = debe estar (Must), **B** = debería estar (Should), **C** =
 | RNF-40 | Venta rápida completa en < 30 s usando teclado y mouse|
 | RNF-41 | Interfaz en español, tema claro, optimizada para monitor de escritorio (≥ 1366 px) |
 | RNF-42 | Mensajes de error accionables ("Ya hay una sesión de admin activa", no códigos crípticos) |
+| RNF-43 | Los reportes se consultan online y se exportan sin instalar nada en el cliente ni depender de internet (RNF-01) |
 
 ### Mantenibilidad
 
@@ -199,6 +218,8 @@ Prioridades: **A** = debe estar (Must), **B** = debería estar (Should), **C** =
 | RNF-51 | Migraciones de Prisma siempre commiteadas junto al cambio de schema (nunca untracked) |
 | RNF-52 | Convención de commits `feat:`/`fix:`/`chore:` y una feature por rama/PR (como hasta ahora) |
 | RNF-53 | Navegadores: últimas 2 versiones de Firefox y Chromium |
+| RNF-54 | Toda ampliación del schema (Supplier, `Article.updatedAt`, `User.active`, `ImportBatch`) mantiene el criterio de `tsc --noEmit` y pasa los tests existentes sin regresión |
+| RNF-55 | Cada mejora post defensa se entrega como issue + rama + PR propio, con los RF/RNF citados en la descripción |
 
 ---
 
@@ -300,10 +321,10 @@ npm run dev
 
 ## 8. Backlog / futuro
 
-- **Pedidos a proveedores**: detectar stock ≤ mínimo y agrupar por proveedor con cantidades a pedir (ya existe en CachitoMotos, migrar como M4 si el negocio lo pide).
-- Cambio de códigos de acceso desde la UI (RF-17).
-- Exportación del historial a Excel/CSV.
-- Métricas: artículos más vendidos, ventas por empleado.
+- **Pedidos a proveedores**: agrupar el stock bajo por proveedor con cantidades a pedir (la agrupación por proveedor ya está cubierta por RF-76; falta la lógica de "generar pedido").
+- Exportación del historial de ventas a CSV (a XLSX ya está cubierto por RF-78).
+- Métricas: ventas por empleado agregadas en gráficos (la tabla por vendedor ya está en RF-76).
+- Sugerencias de reorden: calcular precio de venta objetivo a partir del margen de cada proveedor.
 
 ---
 

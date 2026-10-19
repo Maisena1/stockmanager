@@ -13,7 +13,7 @@ export async function login(req: Request, res: Response) {
     return res.status(400).json({ error: "Codigo is required" });
   }
 
-  const users = await prisma.user.findMany();
+  const users = await prisma.user.findMany({ where: { active: true } });
   for (const user of users) {
     if (await comparePassword(codigo, user.code)) {
       if (user.role === "ADMIN") {

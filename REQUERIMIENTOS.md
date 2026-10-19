@@ -162,6 +162,7 @@ Prioridades: **A** = debe estar (Must), **B** = debería estar (Should), **C** =
 | RF-77 | Vista online del reporte en pantalla (pestañas por reporte, tarjetas de indicadores, barras de top productos, tablas), optimizada para monitor de escritorio | B |
 | RF-78 | Exportación de reportes a XLSX (reutilizando la librería `xlsx` ya instalada en el backend) y a PDF vía impresión del navegador (`window.print()` + CSS `@media print`), sin dependencias nuevas | B |
 | RF-79 | Navegación y permisos diferenciados por rol: el empleado no accede a Proveedores, Reportes, Importar ni Auditoría; el admin sí | B |
+| RF-80 | El período de los reportes es dinámico (por día, últimos N días, mes o rango personalizado), con predeterminado de **último mes calendario completo**. Cada reporte tiene filtros propios además de los comunes, y se puede comparar contra el período equivalente anterior | B |
 
 ---
 

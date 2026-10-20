@@ -4,6 +4,7 @@ import { PaymentMethod } from "../generated/prisma/client";
 import { serializeArticle } from "../utils/serialize";
 import { parseLocalDate, endOfLocalDay } from "../utils/balance";
 import { logAudit, formatDetailMoney } from "../lib/audit";
+import { lowStockWhere } from "../lib/lowStock";
 
 
 interface SaleItemInput {
@@ -145,8 +146,9 @@ export async function listSales(req: Request, res: Response) {
 export async function lowStock(req: Request, res: Response) {
   const role = req.user!.role;
   const articles = await prisma.article.findMany({
-    where: { stock: { lte: prisma.article.fields.minStock } },
-    orderBy: { supplier: "asc" },
+    where: lowStockWhere(),
+    include: { supplierInfo: true },
+    orderBy: [{ supplierInfo: { name: "asc" } }, { name: "asc" }],
   });
 
   const withShortage = articles.map((a) => ({

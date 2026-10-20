@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { ApiError } from "../lib/api"
 import { listArticles, type Article } from "../lib/articles"
+import { listSupplierOptions, type SupplierOption } from "../lib/suppliers"
 import { useAuth } from "../contexts/AuthContext"
 import { useDebounce } from "../hooks/useDebounce"
 import { ArticleFormModal } from "../components/ArticleFormModal"
@@ -17,6 +18,11 @@ export default function ArticlesPage() {
   const isAdmin = user?.role === "ADMIN"
   const [query, setQuery] = useState("")
   const debouncedQuery = useDebounce(query, 300)
+  const [supplierId, setSupplierId] = useState("")
+  const [updatedFrom, setUpdatedFrom] = useState("")
+  const [updatedTo, setUpdatedTo] = useState("")
+  const [lowStockOnly, setLowStockOnly] = useState(false)
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([])
   const [articles, setArticles] = useState<Article[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -24,11 +30,30 @@ export default function ArticlesPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Article | null>(null)
   const [deleting, setDeleting] = useState<Article | null>(null)
-  const lowStockCount = articles.filter(isLowStock).length
 
   useEffect(() => {
     let cancelled = false
-    listArticles(debouncedQuery)
+    listSupplierOptions()
+      .then((data) => {
+        if (!cancelled) setSuppliers(data)
+      })
+      .catch(() => {
+        if (!cancelled) setSuppliers([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    listArticles({
+      q: debouncedQuery,
+      supplierId: supplierId ? Number(supplierId) : undefined,
+      updatedFrom: updatedFrom || undefined,
+      updatedTo: updatedTo || undefined,
+      lowStock: lowStockOnly || undefined,
+    })
       .then((data) => {
         if (cancelled) return
         setArticles(data)
@@ -45,27 +70,33 @@ export default function ArticlesPage() {
     return () => {
       cancelled = true
     }
-  }, [debouncedQuery])
+  }, [debouncedQuery, supplierId, updatedFrom, updatedTo, lowStockOnly])
 
-  const sortedArticles = [...articles].sort((a, b) => {
-    const la = isLowStock(a)
-    const lb = isLowStock(b)
-    if (la && !lb) return -1
-    if (!la && lb) return 1
-    return 0
-  })
+  const totalPages = Math.max(1, Math.ceil(articles.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const visible = articles.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
-  function goToFirstLowStock() {
-    const firstIndex = sortedArticles.findIndex(isLowStock)
-    if (firstIndex === -1) return
-    const newPage = Math.floor(firstIndex / PAGE_SIZE) + 1
-    setPage(newPage)
-    window.scrollTo({ top: 0, behavior: "smooth" })
+  const supplierName = suppliers.find((s) => String(s.id) === supplierId)?.name
+  const activeFilters = [
+    query.trim() ? { key: "q", label: `Búsqueda: "${query.trim()}"` } : null,
+    supplierId ? { key: "supplier", label: `Proveedor: ${supplierName ?? supplierId}` } : null,
+    updatedFrom ? { key: "from", label: `Desde: ${updatedFrom}` } : null,
+    updatedTo ? { key: "to", label: `Hasta: ${updatedTo}` } : null,
+    lowStockOnly ? { key: "lowStock", label: "Solo stock bajo" } : null,
+  ].filter((filter): filter is { key: string; label: string } => filter !== null)
+
+  function clearError() {
+    setError(null)
   }
 
-  const totalPages = Math.max(1, Math.ceil(sortedArticles.length / PAGE_SIZE))
-  const safePage = Math.min(page, totalPages)
-  const visible = sortedArticles.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+  function clearFilters() {
+    setQuery("")
+    setSupplierId("")
+    setUpdatedFrom("")
+    setUpdatedTo("")
+    setLowStockOnly(false)
+    clearError()
+  }
 
   function openCreate() {
     setEditing(null)
@@ -78,12 +109,22 @@ export default function ArticlesPage() {
   }
 
   async function reload() {
+    setLoading(true)
+    setError(null)
     try {
-      const data = await listArticles(debouncedQuery)
+      const data = await listArticles({
+        q: debouncedQuery,
+        supplierId: supplierId ? Number(supplierId) : undefined,
+        updatedFrom: updatedFrom || undefined,
+        updatedTo: updatedTo || undefined,
+        lowStock: lowStockOnly || undefined,
+      })
       setArticles(data)
       setPage((p) => Math.min(p, Math.max(1, Math.ceil(data.length / PAGE_SIZE))))
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "No se pudo cargar")
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -102,28 +143,99 @@ export default function ArticlesPage() {
         )}
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value)
-            setLoading(true)
-            setError(null)
-          }}
-          placeholder="Buscar por nombre, categoría, modelo o código..."
-          className="w-full max-w-md rounded border border-gray-300 px-3 py-2 text-sm"
-        />
-        {lowStockCount > 0 && (
+      <div className="mb-4 flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1 text-sm text-gray-700">
+          Buscar
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              clearError()
+            }}
+            placeholder="Nombre, categoría, modelo, código o proveedor..."
+            className="w-full min-w-72 rounded border border-gray-300 px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm text-gray-700">
+          Proveedor
+          <select
+            value={supplierId}
+            onChange={(e) => {
+              setSupplierId(e.target.value)
+              clearError()
+            }}
+            className="rounded border border-gray-300 px-3 py-2 text-sm"
+          >
+            <option value="">Todos</option>
+            {suppliers.map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {supplier.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm text-gray-700">
+          Modificado desde
+          <input
+            type="date"
+            value={updatedFrom}
+            max={updatedTo || undefined}
+            onChange={(e) => {
+              setUpdatedFrom(e.target.value)
+              clearError()
+            }}
+            className="rounded border border-gray-300 px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm text-gray-700">
+          Modificado hasta
+          <input
+            type="date"
+            value={updatedTo}
+            min={updatedFrom || undefined}
+            onChange={(e) => {
+              setUpdatedTo(e.target.value)
+              clearError()
+            }}
+            className="rounded border border-gray-300 px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="flex items-center gap-2 pb-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={lowStockOnly}
+            onChange={(e) => {
+              setLowStockOnly(e.target.checked)
+              clearError()
+            }}
+          />
+          Solo stock bajo
+        </label>
+      </div>
+
+      {activeFilters.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-sm text-gray-600">
+            Filtros activos ({activeFilters.length}):
+          </span>
+          {activeFilters.map((filter) => (
+            <span
+              key={filter.key}
+              className="rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700"
+            >
+              {filter.label}
+            </span>
+          ))}
           <button
             type="button"
-            onClick={goToFirstLowStock}
-            className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100"
+            onClick={clearFilters}
+            className="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-100"
           >
-            Ver {lowStockCount} con bajo stock
+            Limpiar filtros
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {loading && <p className="text-sm text-gray-600">Cargando artículos…</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -178,7 +290,7 @@ export default function ArticlesPage() {
                     {isAdmin && (
                       <td className="px-3 py-2 text-right">{a.minStock ?? "—"}</td>
                     )}
-                    <td className="px-3 py-2">{a.supplierName ?? a.supplier}</td>
+                    <td className="px-3 py-2">{a.supplierName ?? "—"}</td>
                     {isAdmin && (
                       <td className="px-3 py-2 whitespace-nowrap">
                         <button

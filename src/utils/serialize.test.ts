@@ -10,7 +10,6 @@ const fullArticle = {
   salePrice: 4000,
   stock: 50,
   minStock: 10,
-  supplier: "Repuestos Norte",
   barcode: null as string | null,
   photo: null as string | null,
 };

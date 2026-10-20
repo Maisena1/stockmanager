@@ -178,7 +178,7 @@ export default function ArticlesPage() {
                     {isAdmin && (
                       <td className="px-3 py-2 text-right">{a.minStock ?? "—"}</td>
                     )}
-                    <td className="px-3 py-2">{a.supplier}</td>
+                    <td className="px-3 py-2">{a.supplierName ?? a.supplier}</td>
                     {isAdmin && (
                       <td className="px-3 py-2 whitespace-nowrap">
                         <button

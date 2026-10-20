@@ -4,11 +4,11 @@ export type PaymentMethod = "EFECTIVO" | "TARJETA" | "TRANSFERENCIA"
 
 export interface SaleItem {
     id: number
-    articleCode: string
+    articleCode: string | null
+    articleName: string
     quantity: number
     unitPrice: number
     total: number
-    article: { name: string }
 }
 
 export interface Sale {

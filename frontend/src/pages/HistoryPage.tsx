@@ -185,7 +185,7 @@ export default function HistoryPage() {
                           <tbody>
                             {s.items.map((i) => (
                               <tr key={i.id}>
-                                <td className="py-1 pr-3">{i.article.name}</td>
+                                <td className="py-1 pr-3">{i.articleName}</td>
                                 <td className="py-1 pr-3 text-right">{i.quantity}</td>
                                 <td className="py-1 pr-3 text-right">
                                   {formatMoney(i.unitPrice)}

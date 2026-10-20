@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { ApiError } from "../lib/api"
 import {
   createArticle,
@@ -6,6 +6,7 @@ import {
   type Article,
   type ArticleInput,
 } from "../lib/articles"
+import { listSupplierOptions, type SupplierOption } from "../lib/suppliers"
 
 interface Props {
   article: Article | null
@@ -37,24 +38,36 @@ export function ArticleFormModal({ article, onClose, onSaved }: Props) {
   const [minStock, setMinStock] = useState(
     article?.minStock !== undefined ? String(article.minStock) : "",
   )
-  const [supplier, setSupplier] = useState(article?.supplier ?? "")
+  const [supplierId, setSupplierId] = useState(
+    article?.supplierId ? String(article.supplierId) : "",
+  )
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([])
+  const [suppliersLoading, setSuppliersLoading] = useState(true)
+  const [suppliersError, setSuppliersError] = useState<string | null>(null)
   const [barcode, setBarcode] = useState(article?.barcode ?? "")
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const purchase = toNumber(purchasePrice)
-  const pctNum = percentage === "" ? NaN : toNumber(percentage)
-  const impliedGainPct =
-    isEdit && Number.isFinite(purchase) && purchase > 0 && article && Number.isFinite(article.salePrice)
-      ? ((article.salePrice / purchase) - 1) * 100
-      : NaN
-  const previewSalePrice =
-    !Number.isNaN(pctNum) && Number.isFinite(purchase) && purchase > 0
-      ? estimateSalePrice(purchase, pctNum) ?? (article?.salePrice ?? 0)
-      : isEdit && article
-      ? article.salePrice
-      : 0
-  const preview = !Number.isNaN(pctNum) && Number.isFinite(purchase) && purchase > 0 ? estimateSalePrice(purchase, pctNum) : null
+  useEffect(() => {
+    let cancelled = false
+    listSupplierOptions()
+      .then((data) => {
+        if (!cancelled) setSuppliers(data)
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setSuppliersError(e instanceof ApiError ? e.message : "No se pudieron cargar los proveedores")
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSuppliersLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const preview = estimateSalePrice(toNumber(purchasePrice), toNumber(percentage))
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -65,8 +78,12 @@ export function ArticleFormModal({ article, onClose, onSaved }: Props) {
     const stockNum = Number(stock)
     const minStockNum = Number(minStock)
 
-    if (!name.trim() || !category.trim() || !model.trim() || !supplier.trim()) {
-      setFormError("Nombre, categoría, modelo y proveedor son obligatorios")
+    if (!name.trim() || !category.trim() || !model.trim()) {
+      setFormError("Nombre, categoría y modelo son obligatorios")
+      return
+    }
+    if (!supplierId) {
+      setFormError("Tenés que seleccionar un proveedor")
       return
     }
     if (!Number.isFinite(purchase) || purchase < 0) {
@@ -96,7 +113,7 @@ export function ArticleFormModal({ article, onClose, onSaved }: Props) {
           purchasePrice: purchase,
           stock: stockNum,
           minStock: minStockNum,
-          supplier: supplier.trim(),
+          supplierId: Number(supplierId),
           barcode: barcode.trim() || undefined,
         }
         if (pct !== null && Number.isFinite(pct)) data.percentage = pct
@@ -110,7 +127,7 @@ export function ArticleFormModal({ article, onClose, onSaved }: Props) {
           percentage: pct as number,
           stock: stockNum,
           minStock: minStockNum,
-          supplier: supplier.trim(),
+          supplierId: Number(supplierId),
           barcode: barcode.trim() || undefined,
         })
       }
@@ -231,7 +248,29 @@ export function ArticleFormModal({ article, onClose, onSaved }: Props) {
           </div>
           <label className="text-sm">
             Proveedor *
-            <input value={supplier} onChange={(e) => setSupplier(e.target.value)} className={inputClass} />
+            <select
+              value={supplierId}
+              onChange={(e) => setSupplierId(e.target.value)}
+              className={inputClass}
+              disabled={suppliersLoading}
+            >
+              <option value="" disabled>
+                {suppliersLoading ? "Cargando proveedores…" : "Seleccioná un proveedor"}
+              </option>
+              {suppliers.map((supplier) => (
+                <option key={supplier.id} value={supplier.id}>
+                  {supplier.name}
+                </option>
+              ))}
+            </select>
+            {!suppliersLoading && suppliers.length === 0 && (
+              <span className="mt-1 block text-xs text-red-600">
+                No hay proveedores cargados. Creá uno en Proveedores antes de guardar el artículo.
+              </span>
+            )}
+            {suppliersError && (
+              <span className="mt-1 block text-xs text-red-600">{suppliersError}</span>
+            )}
           </label>
           <label className="text-sm">
             Código de barras (opcional)

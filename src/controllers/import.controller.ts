@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { prisma } from "../lib/prisma";
 import { generateCodes } from "../utils/codigo";
 import { normalizeUpperCase } from "../utils/normalizar";
+import { normalizeSupplierName } from "../utils/proveedores";
 import { logAudit } from "../lib/audit";
 import {
   buildPlan,
@@ -106,6 +107,14 @@ export async function runImport(req: Request, res: Response) {
 
   await prisma.$transaction(async (tx) => {
     let generatedIndex = 0;
+    const supplierName = normalizeSupplierName(settings.supplier)!;
+
+    let supplier = await tx.supplier.findFirst({
+      where: { name: { equals: supplierName, mode: "insensitive" } },
+    });
+    if (!supplier) {
+      supplier = await tx.supplier.create({ data: { name: supplierName } });
+    }
 
     for (const entry of plan.toCreate) {
       const code = entry.code ?? generated[generatedIndex++];
@@ -119,7 +128,8 @@ export async function runImport(req: Request, res: Response) {
           salePrice: entry.row.salePrice,
           stock: entry.row.stock,
           minStock: entry.row.minStock,
-          supplier: entry.row.supplier,
+          supplier: supplier.name,
+          supplierId: supplier.id,
           barcode: entry.row.barcode,
         },
       });

@@ -6,10 +6,9 @@ export type AuditAction =
   | "ARTICULO_CREADO"
   | "ARTICULO_ACTUALIZADO"
   | "ARTICULO_ELIMINADO"
-  | "USUARIO_CREADO"
-  | "USUARIO_ACTUALIZADO"
-  | "USUARIO_DESHABILITADO"
-  | "CODIGO_RESETEADO"
+  | "PROVEEDOR_CREADO"
+  | "PROVEEDOR_ACTUALIZADO"
+  | "PROVEEDOR_ELIMINADO"
 
 export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   VENTA: "Venta",
@@ -17,10 +16,9 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   ARTICULO_CREADO: "Artículo creado",
   ARTICULO_ACTUALIZADO: "Artículo actualizado",
   ARTICULO_ELIMINADO: "Artículo eliminado",
-  USUARIO_CREADO: "Usuario creado",
-  USUARIO_ACTUALIZADO: "Usuario actualizado",
-  USUARIO_DESHABILITADO: "Usuario deshabilitado",
-  CODIGO_RESETEADO: "Código de acceso reseteado",
+  PROVEEDOR_CREADO: "Proveedor creado",
+  PROVEEDOR_ACTUALIZADO: "Proveedor actualizado",
+  PROVEEDOR_ELIMINADO: "Proveedor eliminado",
 }
 
 export interface AuditUser {

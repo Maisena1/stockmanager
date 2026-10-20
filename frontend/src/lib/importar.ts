@@ -32,6 +32,7 @@ export interface ImportConfig {
   defaultQuantity: number
   hasHeader: boolean
   columns: ImportColumns
+  confirmDuplicate: boolean
 }
 
 export interface SheetPreview {
@@ -39,8 +40,27 @@ export interface SheetPreview {
   rows: unknown[][]
 }
 
+export interface PreviousImport {
+  id: number
+  fileName: string
+  fileSize: number
+  createdAt: string
+}
+
+export interface DuplicateImport {
+  batchId: number
+  fileName: string
+  fileSize: number
+  createdAt: string
+  count: number
+  cooldownMin: number
+  message: string
+}
+
 export interface PreviewResponse {
   sheets: SheetPreview[]
+  previousImports?: PreviousImport[]
+  duplicate?: DuplicateImport | null
 }
 
 export interface RowError {
@@ -60,12 +80,14 @@ export interface ImportReport {
   updated: number
   skipped: number
   errors: RowError[]
+  warnings?: string[]
 }
 
 export interface ImportResponse {
   report: ImportReport
   imported: boolean
   skipped?: SkippedRow[]
+  batchId?: number
 }
 
 /** Debe coincidir con MAX_XLSX_MB de src/middlewares/upload.ts. */

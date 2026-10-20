@@ -13,8 +13,10 @@ import {
 } from "../lib/importar"
 import type {
   ColumnField,
+  DuplicateImport,
   ImportConfig,
   ImportReport,
+  PreviousImport,
   SheetPreview,
   SkippedRow,
 } from "../lib/importar"
@@ -28,6 +30,13 @@ function formatSize(bytes: number): string {
     : `${(bytes / 1024).toFixed(0)} KB`
 }
 
+function formatDateTime(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })
+}
+
 const INITIAL_CONFIG: ImportConfig = {
   supplier: "",
   motorcycleModel: "",
@@ -39,6 +48,7 @@ const INITIAL_CONFIG: ImportConfig = {
   defaultQuantity: 1,
   hasHeader: true,
   columns: { ...DEFAULT_COLUMNS },
+  confirmDuplicate: false,
 }
 
 export default function ImportPage() {
@@ -50,7 +60,13 @@ export default function ImportPage() {
   const [config, setConfig] = useState<ImportConfig>(INITIAL_CONFIG)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<{ report: ImportReport; skipped: SkippedRow[] } | null>(null)
+  const [previousImports, setPreviousImports] = useState<PreviousImport[]>([])
+  const [duplicate, setDuplicate] = useState<DuplicateImport | null>(null)
+  const [result, setResult] = useState<{
+    report: ImportReport
+    skipped: SkippedRow[]
+    batchId?: number
+  } | null>(null)
 
   const current = sheets.find((s) => s.name === activeSheet) ?? sheets[0]
   const headers = current ? sheetHeaders(current) : []
@@ -64,6 +80,8 @@ export default function ImportPage() {
     setActiveSheet("")
     setConfig(INITIAL_CONFIG)
     setError(null)
+    setPreviousImports([])
+    setDuplicate(null)
     setResult(null)
   }
 
@@ -86,9 +104,12 @@ export default function ImportPage() {
       setSheets(preview.sheets)
       setSelectedSheets(preview.sheets.map((s) => s.name))
       setActiveSheet(preview.sheets[0].name)
+      setPreviousImports(preview.previousImports ?? [])
+      setDuplicate(preview.duplicate ?? null)
       // Si la primera fila es un encabezado, se sugiere el mapeo con esa fila
       setConfig((prev) => ({
         ...prev,
+        confirmDuplicate: false,
         columns: guessColumns(sheetHeaders(preview.sheets[0])),
       }))
       setStep(2)
@@ -126,17 +147,38 @@ export default function ImportPage() {
       setError("El porcentaje de ganancia no puede ser negativo")
       return
     }
+    if (duplicate && !config.confirmDuplicate) {
+      setError("Marcá la confirmación para volver a importar este archivo")
+      return
+    }
 
     setError(null)
     setLoading(true)
     try {
       const response = await runImport(file, config, selectedSheets)
-      setResult({ report: response.report, skipped: response.skipped ?? [] })
+      setResult({
+        report: response.report,
+        skipped: response.skipped ?? [],
+        batchId: response.batchId,
+      })
       setStep(3)
     } catch (err) {
       if (err instanceof ApiError) {
+        const body = err.body as {
+          report?: ImportReport
+          duplicate?: DuplicateImport
+        } | null
+
+        // El preview pudo no verlo (por ejemplo, si otro admin importó el
+        // mismo archivo mientras tanto): el 409 es la fuente de verdad.
+        if (err.status === 409 && body?.duplicate) {
+          setDuplicate(body.duplicate)
+          setError(null)
+          setConfig((prev) => ({ ...prev, confirmDuplicate: false }))
+          return
+        }
+
         setError(err.message)
-        const body = err.body as { report?: ImportReport } | null
         if (body?.report) {
           setResult({ report: body.report, skipped: [] })
           setStep(3)
@@ -224,6 +266,41 @@ export default function ImportPage() {
               {formatSize(file.size)}
             </span>
           </div>
+
+          {duplicate && (
+            <div className="rounded border border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-900">
+              <p className="font-semibold">Este archivo ya se importó hace poco</p>
+              <p className="mt-1">{duplicate.message}</p>
+              <label className="mt-3 flex items-center gap-2 font-medium">
+                <input
+                  type="checkbox"
+                  checked={config.confirmDuplicate}
+                  onChange={(e) =>
+                    setConfig((prev) => ({ ...prev, confirmDuplicate: e.target.checked }))
+                  }
+                />
+                Confirmo que quiero importar este archivo de nuevo
+              </label>
+            </div>
+          )}
+
+          {previousImports.length > 0 && (
+            <details className="rounded bg-white p-4 text-sm">
+              <summary className="cursor-pointer font-medium">
+                Importaciones previas de este nombre de archivo ({previousImports.length})
+              </summary>
+              <ul className="mt-2 divide-y">
+                {previousImports.map((item) => (
+                  <li key={item.id} className="flex flex-wrap justify-between gap-2 py-1.5">
+                    <span>Importación #{item.id}</span>
+                    <span className="text-gray-600">
+                      {formatSize(item.fileSize)} · {formatDateTime(item.createdAt)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
 
           <div className="rounded bg-white p-4">
             <h2 className="mb-2 font-semibold">Hojas a importar</h2>
@@ -431,10 +508,14 @@ export default function ImportPage() {
             </button>
             <button
               onClick={() => void handleImport()}
-              disabled={loading}
+              disabled={loading || (duplicate !== null && !config.confirmDuplicate)}
               className="rounded bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50"
             >
-              {loading ? "Importando..." : "Importar artículos"}
+              {loading
+                ? "Importando..."
+                : duplicate
+                  ? "Importar de todos modos"
+                  : "Importar artículos"}
             </button>
           </div>
         </div>
@@ -451,6 +532,17 @@ export default function ImportPage() {
             </div>
           )}
 
+          {result.report.warnings && result.report.warnings.length > 0 && (
+            <div className="rounded border border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-900">
+              <p className="font-semibold">Avisos</p>
+              <ul className="mt-1 list-disc pl-5">
+                {result.report.warnings.map((warning, i) => (
+                  <li key={i}>{warning}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="grid grid-cols-3 gap-3">
             {[
               { label: "Creados", value: result.report.created, tone: "text-green-700" },
@@ -463,6 +555,10 @@ export default function ImportPage() {
               </div>
             ))}
           </div>
+
+          {result.batchId !== undefined && (
+            <p className="text-sm text-gray-600">Importación #{result.batchId}</p>
+          )}
 
           {result.skipped.length > 0 && (
             <div className="rounded bg-white p-4">

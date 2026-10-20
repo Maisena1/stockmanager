@@ -23,6 +23,7 @@ export interface ImportSettings {
   defaultQuantity: number;
   columns: ImportColumns;
   hasHeader: boolean;
+  confirmDuplicate: boolean;
 }
 
 export interface SheetData {
@@ -90,6 +91,7 @@ export interface ImportReport {
   updated: number;
   skipped: number;
   errors: RowError[];
+  warnings?: string[];
 }
 
 export type SettingsParseResult =
@@ -246,6 +248,7 @@ export function parseSettings(input: unknown): SettingsParseResult {
       defaultQuantity: defaultQuantity ?? 1,
       columns,
       hasHeader: toBoolean(source.hasHeader, true),
+      confirmDuplicate: toBoolean(source.confirmDuplicate, false),
     },
   };
 }

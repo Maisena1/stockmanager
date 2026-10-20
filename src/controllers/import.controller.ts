@@ -1,10 +1,13 @@
 import { Request, Response } from "express";
 import * as XLSX from "xlsx";
+import type { Prisma } from "../generated/prisma/client";
 import { prisma } from "../lib/prisma";
 import { generateCodes } from "../utils/codigo";
 import { normalizeUpperCase } from "../utils/normalizar";
 import { normalizeSupplierName } from "../utils/proveedores";
 import { logAudit } from "../lib/audit";
+import { findRecentDuplicate } from "../lib/importBatches";
+import { buildDuplicateMessage, buildDuplicateWarning } from "../utils/importBatches";
 import {
   buildPlan,
   parseSettings,
@@ -42,11 +45,35 @@ export async function preview(req: Request, res: Response) {
     return { name, rows };
   });
 
-  return res.json({ sheets });
+  const now = new Date();
+  const previousImports = await prisma.importBatch.findMany({
+    where: { fileName: req.file.originalname },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, fileName: true, fileSize: true, createdAt: true },
+  });
+
+  const duplicate = await findRecentDuplicate(req.file.originalname, req.file.size, now);
+
+  return res.json({
+    sheets,
+    previousImports,
+    duplicate: duplicate
+      ? {
+          batchId: duplicate.batchId,
+          fileName: duplicate.fileName,
+          fileSize: duplicate.fileSize,
+          createdAt: duplicate.createdAt,
+          count: duplicate.count,
+          cooldownMin: duplicate.cooldownMin,
+          message: buildDuplicateMessage(duplicate, req.user!.userId, now),
+        }
+      : null,
+  });
 }
 
 export async function runImport(req: Request, res: Response) {
-  if (!req.file) {
+  const file = req.file;
+  if (!file) {
     return res.status(400).json({ error: "Archivo requerido" });
   }
 
@@ -56,7 +83,33 @@ export async function runImport(req: Request, res: Response) {
   }
   const settings = parsed.settings;
 
-  const workbook = readWorkbook(req.file.buffer);
+  // Chequeo rápido antes de parsear el workbook: el nombre y el peso ya están
+  // disponibles y el criterio es solo contra el archivo repetido.
+  const now = new Date();
+  const duplicate = await findRecentDuplicate(file.originalname, file.size, now);
+
+  if (duplicate && !settings.confirmDuplicate) {
+    const message = buildDuplicateMessage(duplicate, req.user!.userId, now);
+    return res.status(409).json({
+      error: message,
+      imported: false,
+      duplicate: {
+        batchId: duplicate.batchId,
+        fileName: duplicate.fileName,
+        fileSize: duplicate.fileSize,
+        createdAt: duplicate.createdAt,
+        count: duplicate.count,
+        cooldownMin: duplicate.cooldownMin,
+        message,
+      },
+    });
+  }
+
+  const warnings = duplicate
+    ? [buildDuplicateWarning(duplicate, now)]
+    : [];
+
+  const workbook = readWorkbook(file.buffer);
   if (!workbook) {
     return res.status(400).json({ error: "Archivo XLSX inválido" });
   }
@@ -105,7 +158,7 @@ export async function runImport(req: Request, res: Response) {
   let created = 0;
   let updated = 0;
 
-  await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     let generatedIndex = 0;
     const supplierName = normalizeSupplierName(settings.supplier)!;
 
@@ -141,20 +194,39 @@ export async function runImport(req: Request, res: Response) {
       updated++;
     }
 
+    const report: ImportReport = {
+      created,
+      updated,
+      skipped: plan.skipped.length,
+      errors: [],
+    };
+    if (warnings.length > 0) report.warnings = warnings;
+
+    // El lote se registra en la misma transacción: si algo falla, no queda
+    // un duplicado fantasma que bloquee un reintento.
+    const batch = await tx.importBatch.create({
+      data: {
+        userId: req.user!.userId,
+        fileName: file.originalname,
+        fileSize: file.size,
+        report: report as unknown as Prisma.InputJsonValue,
+      },
+    });
+
     // Auditoría dentro de la misma transacción de la importación (RNF-30).
     await logAudit(tx, {
       userId: req.user!.userId,
       action: "IMPORTACION",
-      detail: `Importación de Excel: ${created} creado(s), ${updated} actualizado(s), ${plan.skipped.length} salteado(s)`,
+      detail: `Importación de Excel "${file.originalname}": ${created} creado(s), ${updated} actualizado(s), ${plan.skipped.length} salteado(s) (lote #${batch.id})`,
     });
+
+    return { report, batchId: batch.id };
   });
 
-  const report: ImportReport = {
-    created,
-    updated,
-    skipped: plan.skipped.length,
-    errors: [],
-  };
-
-  return res.status(201).json({ report, imported: true, skipped: plan.skipped });
+  return res.status(201).json({
+    report: result.report,
+    imported: true,
+    skipped: plan.skipped,
+    batchId: result.batchId,
+  });
 }

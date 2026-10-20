@@ -256,6 +256,22 @@ describe("runImport — control de duplicados", () => {
   });
 });
 
+describe("runImport — proveedor", () => {
+  it("rechaza un proveedor inexistente sin importar ni registrar el lote", async () => {
+    prismaMock.supplier.findFirst.mockResolvedValueOnce(null);
+
+    const res = fakeRes();
+    await runImport(request(), res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toBe("Seleccioná un proveedor existente");
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.article.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.importBatch.create).not.toHaveBeenCalled();
+    expect(prismaMock.supplier.create).not.toHaveBeenCalled();
+  });
+});
+
 describe("preview — importaciones previas", () => {
   it("devuelve previousImports y duplicate para el mismo nombre y peso", async () => {
     await runImport(request(), fakeRes());

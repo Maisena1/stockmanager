@@ -1,5 +1,8 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { Link } from "react-router-dom"
 import { ApiError } from "../lib/api"
+import { listSupplierOptions } from "../lib/suppliers"
+import type { SupplierOption } from "../lib/suppliers"
 import {
   COLUMN_FIELDS,
   DEFAULT_COLUMNS,
@@ -67,10 +70,45 @@ export default function ImportPage() {
     skipped: SkippedRow[]
     batchId?: number
   } | null>(null)
+  const [supplierOptions, setSupplierOptions] = useState<SupplierOption[]>([])
+  const [suppliersLoading, setSuppliersLoading] = useState(true)
+  const [suppliersError, setSuppliersError] = useState<string | null>(null)
+  const [suppliersReloadKey, setSuppliersReloadKey] = useState(0)
 
   const current = sheets.find((s) => s.name === activeSheet) ?? sheets[0]
   const headers = current ? sheetHeaders(current) : []
   const columnTotal = current ? sheetColumnCount(current) : 0
+
+  useEffect(() => {
+    let cancelled = false
+
+    listSupplierOptions()
+      .then((options) => {
+        if (cancelled) return
+        setSupplierOptions(options)
+        setSuppliersError(null)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setSupplierOptions([])
+        setSuppliersError(
+          err instanceof ApiError ? err.message : "No se pudieron cargar los proveedores",
+        )
+      })
+      .finally(() => {
+        if (!cancelled) setSuppliersLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [suppliersReloadKey])
+
+  function reloadSuppliers() {
+    setSuppliersLoading(true)
+    setSuppliersError(null)
+    setSuppliersReloadKey((key) => key + 1)
+  }
 
   function reset() {
     setStep(1)
@@ -137,6 +175,10 @@ export default function ImportPage() {
     }
     if (config.supplier.trim() === "") {
       setError("El proveedor es obligatorio")
+      return
+    }
+    if (!supplierOptions.some((option) => option.name === config.supplier)) {
+      setError("Seleccioná un proveedor de la lista")
       return
     }
     if (config.useExcelPrice && config.columns.salePrice === null) {
@@ -373,11 +415,43 @@ export default function ImportPage() {
             <div className="grid grid-cols-2 gap-3">
               <label className="text-sm">
                 Proveedor *
-                <input
+                <select
                   value={config.supplier}
                   onChange={(e) => setConfig((p) => ({ ...p, supplier: e.target.value }))}
                   className={inputClass}
-                />
+                  disabled={suppliersLoading || supplierOptions.length === 0}
+                >
+                  <option value="">
+                    {suppliersLoading
+                      ? "Cargando proveedores..."
+                      : suppliersError
+                        ? "No se pudieron cargar"
+                        : supplierOptions.length === 0
+                          ? "No hay proveedores cargados"
+                          : "Seleccioná un proveedor"}
+                  </option>
+                  {supplierOptions.map((supplier) => (
+                    <option key={supplier.id} value={supplier.name}>
+                      {supplier.name}
+                    </option>
+                  ))}
+                </select>
+                {suppliersError && (
+                  <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-red-700">
+                    {suppliersError}
+                    <button type="button" onClick={reloadSuppliers} className="underline">
+                      Reintentar
+                    </button>
+                  </span>
+                )}
+                {!suppliersLoading && !suppliersError && supplierOptions.length === 0 && (
+                  <span className="mt-1 block text-xs text-red-700">
+                    No hay proveedores cargados.{" "}
+                    <Link to="/suppliers" className="underline">
+                      Crear proveedor
+                    </Link>
+                  </span>
+                )}
               </label>
               <label className="text-sm">
                 Modelo de moto

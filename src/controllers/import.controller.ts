@@ -83,6 +83,16 @@ export async function runImport(req: Request, res: Response) {
   }
   const settings = parsed.settings;
 
+  // El proveedor debe existir: la importación solo puede asociar proveedores
+  // cargados desde el ABM, no crear uno nuevo con el texto recibido.
+  const supplierName = normalizeSupplierName(settings.supplier)!;
+  const supplier = await prisma.supplier.findFirst({
+    where: { name: { equals: supplierName, mode: "insensitive" } },
+  });
+  if (!supplier) {
+    return res.status(400).json({ error: "Seleccioná un proveedor existente" });
+  }
+
   // Chequeo rápido antes de parsear el workbook: el nombre y el peso ya están
   // disponibles y el criterio es solo contra el archivo repetido.
   const now = new Date();
@@ -160,14 +170,6 @@ export async function runImport(req: Request, res: Response) {
 
   const result = await prisma.$transaction(async (tx) => {
     let generatedIndex = 0;
-    const supplierName = normalizeSupplierName(settings.supplier)!;
-
-    let supplier = await tx.supplier.findFirst({
-      where: { name: { equals: supplierName, mode: "insensitive" } },
-    });
-    if (!supplier) {
-      supplier = await tx.supplier.create({ data: { name: supplierName } });
-    }
 
     for (const entry of plan.toCreate) {
       const code = entry.code ?? generated[generatedIndex++];

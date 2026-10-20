@@ -11,6 +11,7 @@ import ImportPage from "./pages/ImportPage"
 import AuditPage from "./pages/AuditPage"
 import TurnosPage from "./pages/TurnosPage"
 import SuppliersPage from "./pages/SuppliersPage"
+import UsersPage from "./pages/UsersPage"
 
 function App() {
   return (
@@ -42,6 +43,14 @@ function App() {
               element={
                 <ProtectedRoute roles={["ADMIN"]}>
                   <ImportPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/users"
+              element={
+                <ProtectedRoute roles={["ADMIN"]}>
+                  <UsersPage />
                 </ProtectedRoute>
               }
             />

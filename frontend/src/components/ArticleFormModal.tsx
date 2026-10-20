@@ -67,7 +67,22 @@ export function ArticleFormModal({ article, onClose, onSaved }: Props) {
     }
   }, [])
 
-  const preview = estimateSalePrice(toNumber(purchasePrice), toNumber(percentage))
+  const purchase = toNumber(purchasePrice)
+  const pctNum = percentage.trim() === "" ? NaN : toNumber(percentage)
+  const impliedGainPct =
+    isEdit && Number.isFinite(purchase) && purchase > 0 && article && Number.isFinite(article.salePrice)
+      ? ((article.salePrice / purchase) - 1) * 100
+      : NaN
+  const previewSalePrice =
+    !Number.isNaN(pctNum) && Number.isFinite(purchase) && purchase > 0
+      ? estimateSalePrice(purchase, pctNum) ?? (article?.salePrice ?? 0)
+      : isEdit && article
+        ? article.salePrice
+        : 0
+  const preview =
+    !Number.isNaN(pctNum) && Number.isFinite(purchase) && purchase > 0
+      ? estimateSalePrice(purchase, pctNum)
+      : null
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

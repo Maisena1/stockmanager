@@ -5,35 +5,29 @@ import { serializeArticle } from "../utils/serialize";
 import { calculateSalePrice } from "../utils/precio";
 import { generateCode } from "../utils/codigo";
 import { logAudit } from "../lib/audit";
-import { normalizeSupplierName, parsePositiveId } from "../utils/proveedores";
+import { lowStockWhere } from "../lib/lowStock";
+import { parsePositiveId } from "../utils/proveedores";
+import { firstString, parseBooleanQuery, parseDateQuery } from "../utils/query";
 import fs from "node:fs";
 import path from "node:path";
 
 type SupplierResolution =
-  | { ok: true; supplierId: number | null; supplierName: string | null }
+  | { ok: true; supplierId: number }
   | { ok: false; error: string };
 
 async function resolveSupplierInput(data: Record<string, unknown>): Promise<SupplierResolution> {
-  if (data.supplierId !== undefined && data.supplierId !== null) {
-    const id = parsePositiveId(data.supplierId);
-    if (id === null) {
-      return { ok: false, error: "El proveedor seleccionado no es válido" };
-    }
-    const supplier = await prisma.supplier.findUnique({
-      where: { id },
-      select: { id: true, name: true },
-    });
-    if (!supplier) {
-      return { ok: false, error: "El proveedor seleccionado no existe" };
-    }
-    return { ok: true, supplierId: supplier.id, supplierName: supplier.name };
+  const id = parsePositiveId(data.supplierId);
+  if (id === null) {
+    return { ok: false, error: "El proveedor seleccionado no es válido" };
   }
-
-  return {
-    ok: true,
-    supplierId: null,
-    supplierName: normalizeSupplierName(data.supplier),
-  };
+  const supplier = await prisma.supplier.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+  if (!supplier) {
+    return { ok: false, error: "El proveedor seleccionado no existe" };
+  }
+  return { ok: true, supplierId: supplier.id };
 }
 
 function isUniqueConstraintError(err: unknown): boolean {
@@ -42,32 +36,65 @@ function isUniqueConstraintError(err: unknown): boolean {
 
 
 export async function list(req: Request, res: Response) {
-  const { q, name, category, model, supplierId } = req.query;
   const role = req.user!.role;
+  const q = firstString(req.query.q);
+  const name = firstString(req.query.name);
+  const category = firstString(req.query.category);
+  const model = firstString(req.query.model);
+  const supplier = firstString(req.query.supplier);
+  const supplierIdRaw = firstString(req.query.supplierId);
 
-  const where: Record<string, unknown> = {};
-  if (typeof q === "string" && q) {
+  const lowStock = parseBooleanQuery(req.query.lowStock);
+  if (lowStock === null) {
+    return res.status(400).json({ error: "El filtro lowStock debe ser true o false" });
+  }
+
+  const updatedFrom = parseDateQuery(req.query.updatedFrom, false);
+  if (updatedFrom === null) {
+    return res.status(400).json({ error: "La fecha updatedFrom no es válida (formato AAAA-MM-DD)" });
+  }
+  const updatedTo = parseDateQuery(req.query.updatedTo, true);
+  if (updatedTo === null) {
+    return res.status(400).json({ error: "La fecha updatedTo no es válida (formato AAAA-MM-DD)" });
+  }
+
+  const where: Prisma.ArticleWhereInput = {};
+  if (q) {
     where.OR = [
       { name: { contains: q, mode: "insensitive" } },
       { category: { contains: q, mode: "insensitive" } },
       { motorcycleModel: { contains: q, mode: "insensitive" } },
       { barcode: { contains: q, mode: "insensitive" } },
+      { supplierInfo: { is: { name: { contains: q, mode: "insensitive" } } } },
     ];
   }
-  if (typeof name === "string" && name) where.name = { contains: name, mode: "insensitive" };
-  if (typeof category === "string" && category) where.category = { contains: category, mode: "insensitive" };
-  if (typeof model === "string" && model) where.motorcycleModel = { contains: model, mode: "insensitive" };
-  if (supplierId !== undefined && supplierId !== "") {
-    const id = typeof supplierId === "string" ? parsePositiveId(supplierId) : null;
+  if (name) where.name = { contains: name, mode: "insensitive" };
+  if (category) where.category = { contains: category, mode: "insensitive" };
+  if (model) where.motorcycleModel = { contains: model, mode: "insensitive" };
+  if (supplier) {
+    where.supplierInfo = { is: { name: { contains: supplier, mode: "insensitive" } } };
+  }
+  if (supplierIdRaw !== undefined && supplierIdRaw !== "") {
+    const id = parsePositiveId(supplierIdRaw);
     if (id === null) {
       return res.status(400).json({ error: "El filtro de proveedor debe ser un número entero positivo" });
     }
     where.supplierId = id;
   }
 
+  const updatedAt: Prisma.DateTimeFilter = {};
+  if (updatedFrom) updatedAt.gte = updatedFrom;
+  if (updatedTo) updatedAt.lte = updatedTo;
+  if (updatedFrom || updatedTo) where.updatedAt = updatedAt;
+
+  if (lowStock) {
+    Object.assign(where, lowStockWhere());
+  }
+
   const articles = await prisma.article.findMany({
     where,
     include: { supplierInfo: true },
+    orderBy: [{ updatedAt: "desc" }, { code: "asc" }],
   });
   return res.json(articles.map((a) => serializeArticle(a, role)));
 }
@@ -93,17 +120,14 @@ export async function create(req: Request, res: Response) {
     !data.name || !data.category || !data.motorcycleModel ||
     data.purchasePrice == null || data.percentage == null ||
     data.stock == null || data.minStock == null ||
-    (data.supplierId === undefined && !data.supplier)
+    data.supplierId == null
   ) {
-    return res.status(400).json({ error: "Missing required fields" });
+    return res.status(400).json({ error: "Faltan campos obligatorios (incluido el proveedor)" });
   }
 
   const supplier = await resolveSupplierInput(data);
   if (!supplier.ok) {
     return res.status(400).json({ error: supplier.error });
-  }
-  if (!supplier.supplierName) {
-    return res.status(400).json({ error: "El proveedor es obligatorio" });
   }
 
   const purchasePrice = Number(data.purchasePrice);
@@ -123,7 +147,6 @@ export async function create(req: Request, res: Response) {
           salePrice,
           stock: Number(data.stock),
           minStock: Number(data.minStock),
-          supplier: supplier.supplierName!,
           supplierId: supplier.supplierId,
           barcode: data.barcode || null,
         },
@@ -171,18 +194,8 @@ export async function update(req: Request, res: Response) {
       if (!supplier.ok) {
         return res.status(400).json({ error: supplier.error });
       }
-      if (!supplier.supplierName) {
-        return res.status(400).json({ error: "El proveedor es obligatorio" });
-      }
       updateData.supplierId = supplier.supplierId;
-      updateData.supplier = supplier.supplierName;
     }
-  } else if (data.supplier !== undefined) {
-    const supplierName = normalizeSupplierName(data.supplier);
-    if (!supplierName) {
-      return res.status(400).json({ error: "El proveedor es obligatorio" });
-    }
-    updateData.supplier = supplierName;
   }
   if (data.barcode !== undefined) updateData.barcode = data.barcode || null;
 

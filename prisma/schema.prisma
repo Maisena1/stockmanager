@@ -80,10 +80,10 @@ model Article {
   salePrice       Float
   stock           Int
   minStock        Int
-  supplier        String
   supplierId      Int?
   barcode         String?    @unique
   photo           String?
+  updatedAt       DateTime   @default(now()) @updatedAt
   saleItems       SaleItem[]
   supplierInfo    Supplier?  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
 }

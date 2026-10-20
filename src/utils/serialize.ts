@@ -14,12 +14,12 @@ interface ArticleFull {
   salePrice: number;
   stock: number;
   minStock: number;
-  supplier: string;
   supplierId?: number | null;
   supplierName?: string | null;
   supplierInfo?: ArticleSupplier | null;
   barcode?: string | null;
   photo?: string | null;
+  updatedAt?: Date;
 }
 
 export function serializeArticle(article: ArticleFull, role: Role) {

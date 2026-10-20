@@ -36,7 +36,7 @@ async function main() {
 
   await prisma.article.upsert({
     where: { code: "FIL-001" },
-    update: { supplier: repuestosNorte.name, supplierId: repuestosNorte.id },
+    update: { supplierId: repuestosNorte.id },
     create: {
       code: "FIL-001",
       name: "Oil Filter",
@@ -46,14 +46,13 @@ async function main() {
       salePrice: 4000,
       stock: 50,
       minStock: 10,
-      supplier: repuestosNorte.name,
       supplierId: repuestosNorte.id,
     },
   });
 
   await prisma.article.upsert({
     where: { code: "BUI-001" },
-    update: { supplier: motoparts.name, supplierId: motoparts.id },
+    update: { supplierId: motoparts.id },
     create: {
       code: "BUI-001",
       name: "NGK Spark Plug",
@@ -63,7 +62,6 @@ async function main() {
       salePrice: 3000,
       stock: 5,
       minStock: 8,
-      supplier: motoparts.name,
       supplierId: motoparts.id,
     },
   });

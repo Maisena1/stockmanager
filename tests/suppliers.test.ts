@@ -165,7 +165,7 @@ describe("POST /api/suppliers", () => {
 });
 
 describe("PATCH /api/suppliers/:id", () => {
-  it("edita el proveedor y sincroniza el nombre legacy de sus artículos", async () => {
+  it("edita el proveedor sin tocar el nombre de sus artículos", async () => {
     prismaMock.supplier.findUnique.mockResolvedValue(supplier);
     prismaMock.supplier.findFirst.mockResolvedValue(null);
     prismaMock.supplier.update.mockResolvedValue({ ...supplier, name: "Norte Repuestos" });
@@ -177,10 +177,8 @@ describe("PATCH /api/suppliers/:id", () => {
     );
 
     expect(res.statusCode).toBe(200);
-    expect(prismaMock.article.updateMany).toHaveBeenCalledWith({
-      where: { supplierId: 3 },
-      data: { supplier: "Norte Repuestos" },
-    });
+    // El nombre se resuelve por la relación; ya no hay columna legacy que sincronizar.
+    expect(prismaMock.article.updateMany).not.toHaveBeenCalled();
     expect(logAudit).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ action: "PROVEEDOR_ACTUALIZADO" }),
@@ -263,7 +261,6 @@ describe("Artículos con proveedor", () => {
     expect(res.statusCode).toBe(201);
     expect(res.body.supplierId).toBe(9);
     expect(res.body.supplierName).toBe("Motoparts");
-    expect(res.body.supplier).toBe("Motoparts");
   });
 
   it("rechaza un artículo con proveedor inexistente", async () => {
@@ -313,7 +310,7 @@ describe("Artículos con proveedor", () => {
     expect(res.statusCode).toBe(200);
     expect(prismaMock.article.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ supplierId: 9, supplier: "Motoparts" }),
+        data: expect.objectContaining({ supplierId: 9 }),
       }),
     );
   });

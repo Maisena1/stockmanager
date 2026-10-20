@@ -181,7 +181,6 @@ export async function runImport(req: Request, res: Response) {
           salePrice: entry.row.salePrice,
           stock: entry.row.stock,
           minStock: entry.row.minStock,
-          supplier: supplier.name,
           supplierId: supplier.id,
           barcode: entry.row.barcode,
         },

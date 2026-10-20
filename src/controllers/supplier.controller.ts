@@ -176,14 +176,6 @@ export async function update(req: Request, res: Response) {
         select: supplierSelect,
       });
 
-      if (data.name && data.name !== target.name) {
-        // La columna legacy sigue en uso por otros endpoints hasta el issue de filtros.
-        await tx.article.updateMany({
-          where: { supplierId: id },
-          data: { supplier: data.name },
-        });
-      }
-
       await logAudit(tx, {
         userId: req.user!.userId,
         action: "PROVEEDOR_ACTUALIZADO",

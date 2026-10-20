@@ -75,32 +75,16 @@ export async function runImport(req: Request, res: Response) {
     return res.status(400).json({ error: "No se seleccionó ninguna hoja con datos" });
   }
 
-  const wantedCodes = new Set<string>();
-  for (const sheet of sheets) {
-    for (let i = 0; i < sheet.rows.length; i++) {
-      const source = sheet.rows[i];
-      if (!Array.isArray(source) || source.length === 0) continue;
-      const raw = settings.columns.code;
-      if (raw === null || raw === undefined) continue;
-      const code = String(source[raw] ?? "").trim();
-      // normalizeUpperCase y no toUpperCase: los códigos se guardan sin acentos,
-      // así que "aceó" tiene que buscar "ACEO" o no encuentra el artículo.
-      if (code) wantedCodes.add(normalizeUpperCase(code));
-    }
-  }
-
-  const existing = wantedCodes.size
-    ? await prisma.article.findMany({
-        where: { code: { in: [...wantedCodes] } },
-        select: { code: true, stock: true, purchasePrice: true, salePrice: true },
-      })
-    : [];
-
-  const existingByCode = new Map<string, ExistingArticle>(
-    existing.map((a) => [normalizeUpperCase(a.code), a]),
+  // El emparejamiento es por nombre normalizado, no por código. Se traen todos
+  // los artículos y se indexan por nombre para tolerar acentos y mayúsculas.
+  const existingArticles = await prisma.article.findMany({
+    select: { code: true, name: true, stock: true, purchasePrice: true, salePrice: true },
+  });
+  const existingByName = new Map<string, ExistingArticle>(
+    existingArticles.map((a) => [normalizeUpperCase(a.name), { ...a, name: a.name }]),
   );
 
-  const plan = buildPlan(sheets, settings, existingByCode);
+  const plan = buildPlan(sheets, settings, existingByName);
 
   // Todo o nada (RNF-30): si alguna fila es inválida no se persiste nada,
   // pero el reporte deja claro qué habría pasado.

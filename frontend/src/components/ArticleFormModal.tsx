@@ -19,7 +19,7 @@ function toNumber(value: string): number {
 }
 
 function estimateSalePrice(purchase: number, percentage: number): number | null {
-  if (!Number.isFinite(purchase) || !Number.isFinite(percentage) || purchase < 0) {
+  if (!Number.isFinite(purchase) || !Number.isFinite(percentage) || purchase < 0 || percentage < 0) {
     return null
   }
   return Math.ceil((purchase * (1 + percentage / 100)) / 100) * 100
@@ -148,6 +148,19 @@ export function ArticleFormModal({ article, onClose, onSaved }: Props) {
         <h2 className="mb-1 text-xl font-bold">
           {isEdit ? `Editar ${article.code}` : "Nuevo artículo"}
         </h2>
+        {isEdit && article && (
+          <div className="mb-4 text-sm text-gray-700">
+            <div>
+              Precio de venta actual:{" "}
+              <strong>${article.salePrice.toLocaleString("es-AR")}</strong>
+            </div>
+            {Number.isFinite(purchase) && purchase > 0 && Number.isFinite(impliedGainPct) && (
+              <div className="text-gray-600">
+                Ganancia implícita sobre precio de compra: {impliedGainPct.toFixed(1)}%
+              </div>
+            )}
+          </div>
+        )}
         {!isEdit && (
           <p className="mb-4 text-sm text-gray-600">
             El código se autogenera (ej: FIL-001).
@@ -158,6 +171,17 @@ export function ArticleFormModal({ article, onClose, onSaved }: Props) {
               </>
             )}
           </p>
+        )}
+        {isEdit && Number.isFinite(purchase) && purchase > 0 && (
+          <div className="mb-3 rounded bg-gray-50 px-3 py-2 text-sm">
+            <span className="text-gray-600">Precio de venta estimado:</span>{" "}
+            <span className="font-semibold">
+              ${previewSalePrice.toLocaleString("es-AR")}
+            </span>
+            {!Number.isNaN(pctNum) && (
+              <span className="ml-2 text-gray-500">(+{pctNum}%)</span>
+            )}
+          </div>
         )}
 
         {formError && (

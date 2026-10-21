@@ -34,17 +34,18 @@ enum AuditAction {
 }
 
 model User {
-  id        Int        @id @default(autoincrement())
-  username  String     @unique
-  code      String
-  role      Role       @default(EMPLOYEE)
-  active    Boolean    @default(true)
-  phone     String?
-  notes     String?
-  sales     Sale[]
-  auditLogs AuditLog[]
-  turnos    Turno[]
-  createdAt DateTime   @default(now())
+  id            Int           @id @default(autoincrement())
+  username      String        @unique
+  code          String
+  role          Role          @default(EMPLOYEE)
+  active        Boolean       @default(true)
+  phone         String?
+  notes         String?
+  sales         Sale[]
+  auditLogs     AuditLog[]
+  turnos        Turno[]
+  importBatches ImportBatch[]
+  createdAt     DateTime      @default(now())
 }
 
 model Supplier {
@@ -55,6 +56,19 @@ model Supplier {
   notes     String?
   createdAt DateTime  @default(now())
   articles  Article[]
+}
+
+model ImportBatch {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  fileName  String
+  fileSize  Int
+  report    Json?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([fileName, fileSize, createdAt])
 }
 
 model Article {
@@ -101,11 +115,11 @@ model SaleItem {
 }
 
 model AuditLog {
-  id        Int          @id @default(autoincrement())
+  id        Int         @id @default(autoincrement())
   userId    Int
   action    AuditAction
   detail    String
-  createdAt DateTime     @default(now())
+  createdAt DateTime    @default(now())
 
   user User @relation(fields: [userId], references: [id])
 }

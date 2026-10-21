@@ -31,6 +31,7 @@ function settings(overrides: Partial<ImportSettings> = {}): ImportSettings {
       barcode: 7,
     },
     hasHeader: true,
+    confirmDuplicate: false,
     ...overrides,
   };
 }
@@ -112,6 +113,19 @@ describe("parseSettings", () => {
     expect(result.settings.columns.purchasePrice).toBe(5);
     expect(result.settings.includeZeroRows).toBe(true);
     expect(result.settings.hasHeader).toBe(false);
+  });
+
+  it("lee confirmDuplicate y por defecto queda en false", () => {
+    const base = { supplier: "Norte", percentage: 30, existing: "skip" };
+    const normal = parseSettings(base);
+    expect(normal.ok).toBe(true);
+    if (!normal.ok) return;
+    expect(normal.settings.confirmDuplicate).toBe(false);
+
+    const confirmada = parseSettings({ ...base, confirmDuplicate: true });
+    expect(confirmada.ok).toBe(true);
+    if (!confirmada.ok) return;
+    expect(confirmada.settings.confirmDuplicate).toBe(true);
   });
 
   it("rechaza falta de proveedor", () => {

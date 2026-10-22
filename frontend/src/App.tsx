@@ -12,6 +12,7 @@ import AuditPage from "./pages/AuditPage"
 import TurnosPage from "./pages/TurnosPage"
 import SuppliersPage from "./pages/SuppliersPage"
 import UsersPage from "./pages/UsersPage"
+import ReportsPage from "./pages/ReportsPage"
 
 function App() {
   return (
@@ -63,6 +64,14 @@ function App() {
               }
             />
             <Route path="/turns" element={<TurnosPage />} />
+            <Route
+              path="/reports"
+              element={
+                <ProtectedRoute roles={["ADMIN"]}>
+                  <ReportsPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/suppliers"
               element={

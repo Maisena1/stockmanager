@@ -100,13 +100,14 @@ model Sale {
 }
 
 model SaleItem {
-  id          Int     @id @default(autoincrement())
-  saleId      Int
-  articleCode String?
-  articleName String
-  quantity    Int
-  unitPrice   Float
-  total       Float
+  id            Int     @id @default(autoincrement())
+  saleId        Int
+  articleCode   String?
+  articleName   String
+  quantity      Int
+  unitPrice     Float
+  purchasePrice Float   @default(0)
+  total         Float
 
   sale    Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
   // Snapshot histórico: si el artículo se elimina, la línea de venta se

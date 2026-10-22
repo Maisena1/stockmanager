@@ -54,6 +54,9 @@ export async function createSale(req: Request, res: Response) {
       articleName: a.name,
       quantity: i.quantity,
       unitPrice: a.salePrice,
+      // Snapshot del costo: el reporte de márgenes históricos no puede
+      // depender del purchasePrice actual del artículo (RF-76).
+      purchasePrice: a.purchasePrice,
       total: i.quantity * a.salePrice,
     };
   });

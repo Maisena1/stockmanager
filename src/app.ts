@@ -10,6 +10,7 @@ import auditRoutes from "./routes/audit.routes";
 import turnsRoutes from "./routes/turns.routes";
 import supplierRoutes from "./routes/supplier.routes";
 import userRoutes from "./routes/user.routes";
+import reportRoutes from "./routes/report.routes";
 const app = express();
 
 app.use(cors());
@@ -27,6 +28,7 @@ app.use("/api/import", importRoutes);
 app.use("/api/audit", auditRoutes);
 app.use("/api/turns", turnsRoutes);
 app.use("/api/suppliers", supplierRoutes);
+app.use("/api/reports", reportRoutes);
 app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 app.use(notFound);
 app.use(errorHandler);

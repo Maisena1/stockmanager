@@ -3,6 +3,15 @@ import { useSearchParams } from "react-router-dom"
 import { ApiError } from "../lib/api"
 import { PeriodPicker } from "../components/PeriodPicker"
 import { Variation } from "../components/Variation"
+import { buildReportFilename } from "../lib/reportFilename"
+import {
+  exportReportPdf,
+  type PdfChart,
+  type PdfKpi,
+  type PdfReportContent,
+  type PdfTableRow,
+  type PdfTableSection,
+} from "../lib/reportPdf"
 import { exportReportXlsx, type ExportColumn } from "../lib/reportExport"
 import {
   defaultReportRange,
@@ -27,6 +36,7 @@ import { listSupplierOptions, type SupplierOption } from "../lib/suppliers"
 import { listUsers, type ManagedUser } from "../lib/users"
 
 const PAGE_SIZE = 20
+const PDF_MAX_ROWS = 2500
 
 const TAB_LABELS: Record<ReportTab, string> = {
   ventas: "Ventas",
@@ -214,7 +224,7 @@ function ReportPagination({
 }) {
   if (pagination.totalPages <= 1) return null
   return (
-    <div className="no-print mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600">
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600">
       <span>
         {pagination.total.toLocaleString("es-AR")} fila(s) · página {pagination.page} de{" "}
         {pagination.totalPages}
@@ -276,7 +286,7 @@ function SalesReportView({ report }: { report: SalesReport }) {
         <EmptyState text="No hay ventas en el período seleccionado" />
       ) : (
         <div className="overflow-x-auto rounded border border-gray-200 bg-white">
-          <table className="report-table w-full text-left text-sm">
+          <table className="w-full text-left text-sm">
             <thead className="bg-gray-100 text-gray-700">
               <tr>
                 <th className="px-3 py-2">Fecha</th>
@@ -420,7 +430,7 @@ function TopProductsView({ report }: { report: TopProductsReport }) {
         <EmptyState text="No hay productos vendidos en el período seleccionado" />
       ) : (
         <div className="overflow-x-auto rounded border border-gray-200 bg-white">
-          <table className="report-table w-full text-left text-sm">
+          <table className="w-full text-left text-sm">
             <thead className="bg-gray-100 text-gray-700">
               <tr>
                 <th className="px-3 py-2">Código</th>
@@ -503,7 +513,7 @@ function LowStockView({ report }: { report: LowStockReport }) {
         <EmptyState text="No hay artículos bajo stock con los filtros seleccionados" />
       ) : (
         <div className="overflow-x-auto rounded border border-gray-200 bg-white">
-          <table className="report-table w-full text-left text-sm">
+          <table className="w-full text-left text-sm">
             <thead className="bg-gray-100 text-gray-700">
               <tr>
                 <th className="px-3 py-2">Código</th>
@@ -597,7 +607,7 @@ function PurchasesView({ report }: { report: PurchasesReport }) {
         <EmptyState text="No hay compras de proveedores en el período seleccionado" />
       ) : (
         <div className="overflow-x-auto rounded border border-gray-200 bg-white">
-          <table className="report-table w-full text-left text-sm">
+          <table className="w-full text-left text-sm">
             <thead className="bg-gray-100 text-gray-700">
               <tr>
                 <th className="px-3 py-2">Proveedor</th>
@@ -633,6 +643,350 @@ function PurchasesView({ report }: { report: PurchasesReport }) {
   )
 }
 
+function pdfData(cells: string[]): PdfTableRow {
+  return { kind: "data", cells }
+}
+
+function pdfGroup(label: string): PdfTableRow {
+  return { kind: "group", label }
+}
+
+function pdfRows<T>(
+  rows: T[],
+  total: number,
+): { rows: T[]; truncated?: { shown: number; total: number } } {
+  if (rows.length <= PDF_MAX_ROWS) return { rows }
+  return {
+    rows: rows.slice(0, PDF_MAX_ROWS),
+    truncated: { shown: PDF_MAX_ROWS, total },
+  }
+}
+
+function salesPdfContent(report: SalesReport): PdfReportContent {
+  const { rows, truncated } = pdfRows(report.rows, report.pagination.total)
+  const previous = report.previous?.summary
+  const kpis: PdfKpi[] = [
+    {
+      label: "Facturado",
+      value: formatMoney(report.summary.total),
+      current: report.summary.total,
+      previous: previous?.total,
+    },
+    {
+      label: "Ventas",
+      value: formatNumber(report.summary.count),
+      current: report.summary.count,
+      previous: previous?.count,
+    },
+    {
+      label: "Ticket promedio",
+      value: formatMoney(report.summary.avgTicket),
+      current: report.summary.avgTicket,
+      previous: previous?.avgTicket,
+    },
+    {
+      label: "Unidades vendidas",
+      value: formatNumber(report.summary.units),
+      current: report.summary.units,
+      previous: previous?.units,
+    },
+  ]
+
+  const sections: PdfTableSection[] = [
+    {
+      columns: [
+        { header: "Fecha", width: 17 },
+        { header: "Vendedor", width: 24 },
+        { header: "Artículos", width: 12, align: "right" },
+        { header: "Total", width: 16, align: "right" },
+        { header: "Pago", width: 14 },
+      ],
+      rows: rows.map((row) =>
+        pdfData([
+          formatDateTime(row.date),
+          row.seller,
+          formatNumber(row.units),
+          formatMoney(row.total),
+          row.paymentMethod,
+        ]),
+      ),
+      emptyText: "No hay ventas en el período seleccionado",
+    },
+  ]
+
+  if (report.rows.length > 0) {
+    sections.push({
+      title: "Por vendedor",
+      columns: [
+        { header: "Vendedor", width: 30 },
+        { header: "Ventas", width: 12, align: "right" },
+        { header: "Artículos", width: 12, align: "right" },
+        { header: "Total", width: 16, align: "right" },
+      ],
+      rows: report.groups.bySeller.map((group) =>
+        pdfData([
+          group.seller,
+          formatNumber(group.count),
+          formatNumber(group.units),
+          formatMoney(group.total),
+        ]),
+      ),
+    })
+
+    sections.push({
+      title: "Por día",
+      columns: [
+        { header: "Día", width: 18 },
+        { header: "Ventas", width: 12, align: "right" },
+        { header: "Artículos", width: 12, align: "right" },
+        { header: "Total", width: 16, align: "right" },
+      ],
+      rows: report.groups.byDay.map((group) =>
+        pdfData([
+          formatDate(group.date),
+          formatNumber(group.count),
+          formatNumber(group.units),
+          formatMoney(group.total),
+        ]),
+      ),
+    })
+  }
+
+  return { kpis, sections, truncated }
+}
+
+function topPdfContent(report: TopProductsReport): PdfReportContent {
+  const { rows, truncated } = pdfRows(report.rows, report.pagination.total)
+  const previous = report.previous?.summary
+  const chartRows = report.rows.filter((row) => row.units > 0).slice(0, 10)
+  const chart: PdfChart | undefined =
+    chartRows.length > 0
+      ? {
+          title: "Top de productos por unidades",
+          items: chartRows.map((row) => ({ label: row.name, value: row.units })),
+        }
+      : undefined
+
+  const kpis: PdfKpi[] = [
+    {
+      label: "Unidades",
+      value: formatNumber(report.summary.units),
+      current: report.summary.units,
+      previous: previous?.units,
+    },
+    {
+      label: "Facturado",
+      value: formatMoney(report.summary.revenue),
+      current: report.summary.revenue,
+      previous: previous?.revenue,
+    },
+    {
+      label: "Margen estimado",
+      value: formatMoney(report.summary.margin),
+      current: report.summary.margin,
+      previous: previous?.margin,
+    },
+    {
+      label: "Productos vendidos",
+      value: formatNumber(report.summary.products),
+      current: report.summary.products,
+      previous: previous?.products,
+    },
+  ]
+
+  const sections: PdfTableSection[] = [
+    {
+      columns: [
+        { header: "Código", width: 10 },
+        { header: "Artículo", width: 30 },
+        { header: "Categoría", width: 18 },
+        { header: "Modelo", width: 14 },
+        { header: "Proveedor", width: 18 },
+        { header: "Unidades", width: 10, align: "right" },
+        { header: "Facturado", width: 14, align: "right" },
+        { header: "Costo", width: 12, align: "right" },
+        { header: "Margen", width: 14, align: "right" },
+        { header: "Margen %", width: 10, align: "right" },
+      ],
+      rows: rows.map((row) =>
+        pdfData([
+          row.code ?? "—",
+          row.name,
+          row.category,
+          row.motorcycleModel,
+          row.supplierName ?? "—",
+          formatNumber(row.units),
+          formatMoney(row.revenue),
+          formatMoney(row.cost),
+          formatMoney(row.margin),
+          `${formatNumber(row.marginPct)}%`,
+        ]),
+      ),
+      emptyText: "No hay productos vendidos en el período seleccionado",
+    },
+  ]
+
+  return { kpis, chart, sections, truncated }
+}
+
+function stockPdfContent(report: LowStockReport): PdfReportContent {
+  const { rows, truncated } = pdfRows(report.rows, report.pagination.total)
+  const groups = new Map<string, LowStockReportRow[]>()
+
+  for (const row of rows) {
+    const key = row.supplierName ?? "Sin proveedor"
+    const groupRows = groups.get(key) ?? []
+    groupRows.push(row)
+    groups.set(key, groupRows)
+  }
+
+  const groupOrder = [
+    ...new Set([
+      ...report.groups.bySupplier.map((group) => group.supplierName),
+      ...groups.keys(),
+    ]),
+  ]
+
+  const body: PdfTableRow[] = []
+  for (const supplierName of groupOrder) {
+    const groupRows = groups.get(supplierName)
+    if (!groupRows || groupRows.length === 0) continue
+
+    const suggested = groupRows.reduce((sum, row) => sum + row.suggestedOrder, 0)
+    body.push(
+      pdfGroup(
+        `${supplierName} - ${groupRows.length} artículo(s) - ${suggested} unidades sugeridas`,
+      ),
+    )
+
+    for (const row of groupRows) {
+      body.push(
+        pdfData([
+          row.code,
+          row.name,
+          row.category,
+          row.motorcycleModel,
+          formatNumber(row.stock),
+          formatNumber(row.minStock),
+          CRITICALITY_LABELS[row.criticality] ?? row.criticality,
+          formatNumber(row.shortage),
+          formatNumber(row.suggestedOrder),
+          formatMoney(row.stockValue),
+        ]),
+      )
+    }
+  }
+
+  const kpis: PdfKpi[] = [
+    {
+      label: "Artículos bajo stock",
+      value: formatNumber(report.summary.articles),
+      current: report.summary.articles,
+    },
+    {
+      label: "Críticos",
+      value: formatNumber(report.summary.critical),
+      current: report.summary.critical,
+    },
+    {
+      label: "Agotados",
+      value: formatNumber(report.summary.out),
+      current: report.summary.out,
+    },
+    {
+      label: "Valor del stock bajo",
+      value: formatMoney(report.summary.stockValue),
+      current: report.summary.stockValue,
+    },
+  ]
+
+  return {
+    kpis,
+    sections: [
+      {
+        columns: [
+          { header: "Código", width: 10 },
+          { header: "Artículo", width: 29 },
+          { header: "Categoría", width: 17 },
+          { header: "Modelo", width: 14 },
+          { header: "Stock", width: 8, align: "right" },
+          { header: "Mínimo", width: 8, align: "right" },
+          { header: "Criticidad", width: 12 },
+          { header: "Faltante", width: 8, align: "right" },
+          { header: "Pedido sugerido", width: 12, align: "right" },
+          { header: "Valor stock", width: 12, align: "right" },
+        ],
+        rows: body,
+        emptyText: "No hay artículos bajo stock con los filtros seleccionados",
+      },
+    ],
+    truncated,
+  }
+}
+
+function purchasesPdfContent(report: PurchasesReport): PdfReportContent {
+  const { rows, truncated } = pdfRows(report.rows, report.pagination.total)
+  const previous = report.previous?.summary
+  const kpis: PdfKpi[] = [
+    {
+      label: "Costo de compras",
+      value: formatMoney(report.summary.cost),
+      current: report.summary.cost,
+      previous: previous?.cost,
+    },
+    {
+      label: "Artículos comprados",
+      value: formatNumber(report.summary.purchasedArticles),
+      current: report.summary.purchasedArticles,
+      previous: previous?.purchasedArticles,
+    },
+    {
+      label: "Valor de inventario",
+      value: formatMoney(report.summary.stockValue),
+      current: report.summary.stockValue,
+      previous: previous?.stockValue,
+    },
+    {
+      label: "Stock parado",
+      value: formatMoney(report.summary.idleStockValue),
+      current: report.summary.idleStockValue,
+      previous: previous?.idleStockValue,
+    },
+  ]
+
+  return {
+    kpis,
+    sections: [
+      {
+        columns: [
+          { header: "Proveedor", width: 26 },
+          { header: "Artículos", width: 10, align: "right" },
+          { header: "Comprados", width: 12, align: "right" },
+          { header: "Costo compras", width: 15, align: "right" },
+          { header: "Valor stock", width: 15, align: "right" },
+          { header: "Stock parado", width: 15, align: "right" },
+          { header: "Unidades vendidas", width: 14, align: "right" },
+          { header: "Última compra", width: 14 },
+        ],
+        rows: rows.map((row) =>
+          pdfData([
+            row.supplierName,
+            formatNumber(row.articles),
+            formatNumber(row.purchasedArticles),
+            formatMoney(row.cost),
+            formatMoney(row.stockValue),
+            formatMoney(row.idleStockValue),
+            formatNumber(row.soldUnits),
+            row.lastPurchaseAt ? formatDate(row.lastPurchaseAt) : "—",
+          ]),
+        ),
+        emptyText: "No hay compras de proveedores en el período seleccionado",
+      },
+    ],
+    truncated,
+  }
+}
+
 export default function ReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [defaults] = useState(() => defaultReportRange())
@@ -644,8 +998,7 @@ export default function ReportsPage() {
   const [purchasesReport, setPurchasesReport] = useState<PurchasesReport | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [exporting, setExporting] = useState(false)
-  const [printHint, setPrintHint] = useState<string | null>(null)
+  const [exporting, setExporting] = useState<"xlsx" | "pdf" | null>(null)
 
   const tab = parseTab(searchParams.get("tab"))
   const preset = searchParams.get("preset") || "mes-anterior"
@@ -866,7 +1219,7 @@ export default function ReportsPage() {
   }
 
   async function handleExportXlsx() {
-    setExporting(true)
+    setExporting("xlsx")
     setError(null)
     try {
       const filters = buildFilters(true)
@@ -920,23 +1273,70 @@ export default function ReportsPage() {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "No se pudo exportar el reporte")
     } finally {
-      setExporting(false)
+      setExporting(null)
     }
   }
 
-  function handlePrint() {
-    setPrintHint(null)
-    window.setTimeout(() => {
-      window.print()
-      setPrintHint(
-        "Se abrió el diálogo de impresión. Si lo cancelaste, podés elegir «Guardar como PDF» como destino.",
-      )
-    }, 50)
+  async function handleDownloadPdf() {
+    setExporting("pdf")
+    setError(null)
+    try {
+      // Deja que el botón muestre "Generando PDF…" antes de bloquear el hilo.
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 50))
+      const filters = buildFilters(true)
+      const filenameFilters = chips.map((chip) => ({ key: chip.key, label: chip.label }))
+
+      if (tab === "ventas") {
+        const report = await getSalesReport(filters)
+        await exportReportPdf({
+          ...salesPdfContent(report),
+          filename: buildReportFilename({
+            tab,
+            period: report.period,
+            filters: filenameFilters,
+          }),
+        })
+      } else if (tab === "top") {
+        const report = await getTopProductsReport(filters)
+        await exportReportPdf({
+          ...topPdfContent(report),
+          filename: buildReportFilename({
+            tab,
+            period: report.period,
+            filters: filenameFilters,
+          }),
+        })
+      } else if (tab === "stock") {
+        const report = await getLowStockReport(filters)
+        await exportReportPdf({
+          ...stockPdfContent(report),
+          filename: buildReportFilename({
+            tab,
+            period: report.period,
+            filters: filenameFilters,
+          }),
+        })
+      } else {
+        const report = await getPurchasesReport(filters)
+        await exportReportPdf({
+          ...purchasesPdfContent(report),
+          filename: buildReportFilename({
+            tab,
+            period: report.period,
+            filters: filenameFilters,
+          }),
+        })
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo generar el PDF")
+    } finally {
+      setExporting(null)
+    }
   }
 
   return (
-    <div className="report-print-area p-6">
-      <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-3">
+    <div className="p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Reportes</h1>
           <p className="text-sm text-gray-600">
@@ -947,34 +1347,23 @@ export default function ReportsPage() {
           <button
             type="button"
             onClick={() => void handleExportXlsx()}
-            disabled={loading || exporting}
+            disabled={loading || exporting !== null}
             className="rounded border border-green-600 px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-50 disabled:opacity-50"
           >
-            {exporting ? "Exportando…" : "Exportar XLSX"}
+            {exporting === "xlsx" ? "Exportando…" : "Exportar XLSX"}
           </button>
           <button
             type="button"
-            onClick={handlePrint}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            onClick={() => void handleDownloadPdf()}
+            disabled={loading || exporting !== null}
+            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            Exportar PDF
+            {exporting === "pdf" ? "Generando PDF…" : "Descargar PDF"}
           </button>
         </div>
       </div>
 
-      <div className="print-only mb-4">
-        <h1 className="text-xl font-bold">StockManager · Reporte de {TAB_LABELS[tab]}</h1>
-        <p className="text-sm">
-          Período: {activePeriod?.label ?? `${from} – ${to}`}
-          {activePeriod ? ` (${shortDate(activePeriod.from)} – ${shortDate(activePeriod.to)})` : ""}
-        </p>
-        {chips.length > 0 && (
-          <p className="text-sm">Filtros: {chips.map((chip) => chip.label).join(" · ")}</p>
-        )}
-        <p className="text-xs text-gray-600">Generado: {new Date().toLocaleString("es-AR")}</p>
-      </div>
-
-      <div className="no-print mb-3 flex flex-wrap gap-1 rounded border border-gray-200 bg-white p-1">
+      <div className="mb-3 flex flex-wrap gap-1 rounded border border-gray-200 bg-white p-1">
         {TAB_ORDER.map((item) => (
           <button
             key={item}
@@ -1000,7 +1389,7 @@ export default function ReportsPage() {
         onCompareChange={updateCompare}
       />
 
-      <div className="no-print mt-3 flex flex-wrap items-end gap-3">
+      <div className="mt-3 flex flex-wrap items-end gap-3">
         {tab === "ventas" && (
           <>
             <label className="flex flex-col gap-1 text-sm text-gray-700">
@@ -1201,7 +1590,7 @@ export default function ReportsPage() {
       </div>
 
       {chips.length > 0 && (
-        <div className="no-print mt-3 flex flex-wrap items-center gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <span className="text-xs uppercase tracking-wide text-gray-500">Filtros activos:</span>
           {chips.map((chip) => (
             <span
@@ -1227,12 +1616,6 @@ export default function ReportsPage() {
             Limpiar filtros
           </button>
         </div>
-      )}
-
-      {printHint && (
-        <p className="no-print mt-3 rounded bg-blue-50 px-3 py-2 text-sm text-blue-800">
-          {printHint}
-        </p>
       )}
 
       {error && (

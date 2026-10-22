@@ -108,7 +108,7 @@ export function PeriodPicker({
   }
 
   return (
-    <div className="no-print flex flex-wrap items-end gap-3 rounded border border-gray-200 bg-white p-3">
+    <div className="flex flex-wrap items-end gap-3 rounded border border-gray-200 bg-white p-3">
       <label className="flex flex-col gap-1 text-sm text-gray-700">
         Período
         <select

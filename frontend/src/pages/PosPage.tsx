@@ -26,6 +26,9 @@ const PAYMENT_METHODS: PaymentMethod[] = [
   "TRANSFERENCIA",
 ]
 
+/** Tamaño de página del buscador del POS, paginado por el backend. */
+const PAGE_SIZE = 15
+
 interface SaleSummary {
   total: number
   articlesCount: number
@@ -36,6 +39,7 @@ export default function PosPage() {
   const [query, setQuery] = useState("")
   const debouncedQuery = useDebounce(query, 300)
   const [supplierId, setSupplierId] = useState("")
+  const [page, setPage] = useState(1)
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([])
   const [results, setResults] = useState<Article[]>([])
   const [cart, setCart] = useState<CartLine[]>([])
@@ -67,11 +71,15 @@ export default function PosPage() {
     const params = new URLSearchParams()
     if (text) params.set("q", text)
     if (supplierId) params.set("supplierId", supplierId)
+    // El buscador del POS pagina en el backend: 15 artículos por página,
+    // nunca la tabla completa del proveedor.
+    params.set("take", String(PAGE_SIZE))
+    params.set("page", String(page))
     api
       .get<Article[]>(`/articles?${params.toString()}`)
       .then((data) => setResults(data))
       .catch(() => setResults([]))
-  }, [debouncedQuery, supplierId])
+  }, [debouncedQuery, supplierId, page])
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -172,7 +180,10 @@ export default function PosPage() {
         <div className="flex gap-2 border-b border-gray-200 p-3">
           <select
             value={supplierId}
-            onChange={(e) => setSupplierId(e.target.value)}
+            onChange={(e) => {
+              setSupplierId(e.target.value)
+              setPage(1)
+            }}
             className="w-48 rounded-lg border border-gray-300 px-2 py-2 text-sm text-gray-800 outline-none focus:border-blue-500"
           >
             <option value="">Todos los proveedores</option>
@@ -185,7 +196,10 @@ export default function PosPage() {
           <input
             ref={searchRef}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setPage(1)
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && results.length > 0) {
                 e.preventDefault()
@@ -230,6 +244,28 @@ export default function PosPage() {
             </ul>
           )}
         </div>
+        {(debouncedQuery.trim() || supplierId) && (
+          <div className="flex items-center justify-between border-t border-gray-200 px-3 py-2 text-sm text-gray-600">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="rounded border border-gray-300 px-2 py-1 text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              ‹ Anterior
+            </button>
+            <span>Página {page}</span>
+            {/* Si la página no viene completa es que no hay más resultados. */}
+            <button
+              type="button"
+              onClick={() => setPage((p) => p + 1)}
+              disabled={results.length < PAGE_SIZE}
+              className="rounded border border-gray-300 px-2 py-1 text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Siguiente ›
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col rounded-lg border border-gray-200 bg-white shadow-sm">

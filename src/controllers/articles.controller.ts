@@ -91,10 +91,35 @@ export async function list(req: Request, res: Response) {
     Object.assign(where, lowStockWhere());
   }
 
+  // Límite de resultados pedido por el cliente (ej: buscador del POS). Opcional;
+  // sin take el listado completo sigue comportándose como siempre.
+  const takeRaw = firstString(req.query.take);
+  let take: number | undefined;
+  if (takeRaw !== undefined && takeRaw !== "") {
+    const parsed = Number.parseInt(takeRaw, 10);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return res.status(400).json({ error: "El límite (take) debe ser un número entero positivo" });
+    }
+    // Tope duro para evitar que un cliente pida la tabla completa igual.
+    take = Math.min(parsed, 100);
+  }
+
+  // Página (1-based) para combinar con take: skip = (page - 1) * take.
+  const pageRaw = firstString(req.query.page);
+  let page = 1;
+  if (pageRaw !== undefined && pageRaw !== "") {
+    const parsed = Number.parseInt(pageRaw, 10);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return res.status(400).json({ error: "La página (page) debe ser un número entero positivo" });
+    }
+    page = parsed;
+  }
+
   const articles = await prisma.article.findMany({
     where,
     include: { supplierInfo: true },
     orderBy: [{ updatedAt: "desc" }, { code: "asc" }],
+    ...(take !== undefined ? { take, skip: (page - 1) * take } : {}),
   });
   return res.json(articles.map((a) => serializeArticle(a, role)));
 }

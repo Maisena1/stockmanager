@@ -78,6 +78,8 @@ export default function TurnosPage() {
       setACerrar(null)
       setModal(data)
       refresh()
+      // Si cerraste tu propio turno, el Layout lo refresca y desaparece el botón.
+      window.dispatchEvent(new Event("turno-actualizado"))
     } catch (e) {
       setACerrar(null)
       setError(errorMessage(e, "No se pudo cerrar el turno"))

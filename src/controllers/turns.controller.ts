@@ -90,6 +90,21 @@ export async function closeTurno(req: Request, res: Response) {
   return res.json({ turno: cerrado, resumen });
 }
 
+/**
+ * Turno abierto del propio usuario. Lo usa el Layout para el indicador y para
+ * mostrar/ocultar el botón de cierre sin depender de recargar la página.
+ * El admin ve su propio turno, no el de los empleados.
+ */
+export async function activeTurno(req: Request, res: Response) {
+  const userId = req.user!.userId;
+  const turno = await prisma.turno.findFirst({
+    where: { userId, cerradoAt: null },
+    orderBy: { abiertoAt: "desc" },
+    include: { user: userSelect },
+  });
+  return res.json(turno);
+}
+
 export async function listTurnos(req: Request, res: Response) {
   const role = req.user!.role;
   const userId = req.user!.userId;

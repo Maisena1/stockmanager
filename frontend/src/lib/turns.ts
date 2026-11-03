@@ -57,6 +57,11 @@ export function listTurnos(): Promise<Turno[]> {
   return api.get<Turno[]>("/turns")
 }
 
+/** Turno abierto del usuario logueado, o `null` si no tiene ninguno. */
+export function getActiveTurno(): Promise<Turno | null> {
+  return api.get<Turno | null>("/turns/active")
+}
+
 export function getTurno(id: number): Promise<TurnoConResumen> {
   return api.get<TurnoConResumen>(`/turns/${id}`)
 }

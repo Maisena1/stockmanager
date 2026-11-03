@@ -2,7 +2,12 @@ import { useEffect, useState } from "react"
 import { NavLink, Outlet, useNavigate } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
 import { api, ApiError } from "../lib/api"
-import { closeTurno, type TurnoConResumen } from "../lib/turns"
+import {
+  closeTurno,
+  getActiveTurno,
+  type Turno,
+  type TurnoConResumen,
+} from "../lib/turns"
 import { TurnoResumenModal } from "./TurnoResumenModal"
 
 function navClass({ isActive }: { isActive: boolean }) {
@@ -11,14 +16,61 @@ function navClass({ isActive }: { isActive: boolean }) {
   }`
 }
 
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString("es-AR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
 export function Layout() {
-  const { user, loginAt, token, logout } = useAuth()
+  const { user, token, logout } = useAuth()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
   const [confirmarCierre, setConfirmarCierre] = useState(false)
   const [resumenTurno, setResumenTurno] = useState<TurnoConResumen | null>(null)
   const [cerrando, setCerrando] = useState(false)
   const [errorCierre, setErrorCierre] = useState<string | null>(null)
+  const [turnoActivo, setTurnoActivo] = useState<Turno | null>(null)
+  const [turnoCargado, setTurnoCargado] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function cargarTurnoActivo() {
+      try {
+        const turno = await getActiveTurno()
+        if (!cancelled) {
+          setTurnoActivo(turno)
+          setTurnoCargado(true)
+        }
+      } catch {
+        // Si falla, dejamos el último estado que hubo: la próxima consulta/poll
+        // o el regreso a la pestaña lo sincronizan de nuevo.
+      }
+    }
+
+    function onVisibility() {
+      if (document.visibilityState === "visible") void cargarTurnoActivo()
+    }
+    function onTurnoActualizado() {
+      void cargarTurnoActivo()
+    }
+
+    void cargarTurnoActivo()
+    const interval = setInterval(() => {
+      void cargarTurnoActivo()
+    }, 30_000)
+    window.addEventListener("turno-actualizado", onTurnoActualizado)
+    document.addEventListener("visibilitychange", onVisibility)
+
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+      window.removeEventListener("turno-actualizado", onTurnoActualizado)
+      document.removeEventListener("visibilitychange", onVisibility)
+    }
+  }, [user, token])
 
   useEffect(() => {
     if (user?.role !== "ADMIN") return
@@ -43,6 +95,7 @@ export function Layout() {
       const data = await closeTurno()
       setConfirmarCierre(false)
       setResumenTurno(data)
+      setTurnoActivo(data.turno.cerradoAt ? null : data.turno)
     } catch (e) {
       setErrorCierre(e instanceof ApiError ? e.message : "No se pudo cerrar el turno")
     } finally {
@@ -50,12 +103,7 @@ export function Layout() {
     }
   }
 
-  const sessionSince = loginAt
-    ? new Date(loginAt).toLocaleTimeString("es-AR", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : null
+  const turnoAbiertoDesde = turnoActivo ? formatTime(turnoActivo.abiertoAt) : null
 
   const links = (
     <>
@@ -116,21 +164,27 @@ export function Layout() {
             <span className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-600">
               {user?.role}
             </span>
-            {user?.role === "ADMIN" && loginAt && (
+            {user && (
               <span className="hidden text-xs text-gray-500 lg:inline">
-                Sesión activa desde {sessionSince}
+                {turnoActivo
+                  ? `Turno abierto desde ${turnoAbiertoDesde}`
+                  : turnoCargado
+                    ? "Sin turno abierto"
+                    : "Cargando turno…"}
               </span>
             )}
-            <button
-              type="button"
-              onClick={() => {
-                setErrorCierre(null)
-                setConfirmarCierre(true)
-              }}
-              className="rounded border border-blue-600 px-3 py-1 text-sm font-medium text-blue-600 hover:bg-blue-50"
-            >
-              Cerrar turno
-            </button>
+            {turnoActivo && (
+              <button
+                type="button"
+                onClick={() => {
+                  setErrorCierre(null)
+                  setConfirmarCierre(true)
+                }}
+                className="rounded border border-blue-600 px-3 py-1 text-sm font-medium text-blue-600 hover:bg-blue-50"
+              >
+                Cerrar turno
+              </button>
+            )}
             <button
               type="button"
               onClick={handleLogout}

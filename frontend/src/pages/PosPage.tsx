@@ -169,6 +169,8 @@ export default function PosPage() {
       setSummary({ total: res.total, articlesCount: res.articlesCount, paymentMethod })
       setCart([])
       setPaymentMethod(null)
+      // Si la venta abrió un turno nuevo, el Layout lo sincroniza sin recargar.
+      window.dispatchEvent(new Event("turno-actualizado"))
     } catch (err) {
       setSaleError(err instanceof Error ? err.message : "Error inesperado")
     } finally {

@@ -30,12 +30,14 @@ export interface Balance {
 export interface DateRange {
     from?: string
     to?: string
+    paymentMethod?: PaymentMethod
 }
 
 function toQuery(range: DateRange): string {
     const params= new URLSearchParams()
     if (range.from) params.set("from", range.from)
     if (range.to) params.set("to", range.to)
+    if (range.paymentMethod) params.set("paymentMethod", range.paymentMethod)
     const q = params.toString()
     return q ? `?${q}` : ""
 }
@@ -45,6 +47,8 @@ export function listSales(range: DateRange = {}): Promise<Sale[]> {
 }
 
 export function getBalance(range: DateRange = {}):Promise<Balance> {
-    if (!range.from && !range.to) return api.get<Balance>("/balance/today")
+    // Si el usuario filtró por tipo de pago pero no puso fechas, el balance
+    // pega a /balance en vez de /balance/today (que no filtra por pago).
+    if (!range.from && !range.to && !range.paymentMethod) return api.get<Balance>("/balance/today")
         return api.get<Balance>(`/balance${toQuery(range)}`)
 }

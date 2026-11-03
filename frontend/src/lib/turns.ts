@@ -1,5 +1,8 @@
 import { api } from "./api"
 import type { AuditAction } from "./audit"
+import type { PaymentMethod } from "./sales"
+
+export type { PaymentMethod }
 
 export interface Turno {
   id: number
@@ -15,6 +18,22 @@ export interface ResumenVentas {
   byPayment: Record<string, { count: number; total: number }>
 }
 
+export interface ResumenVentaItem {
+  id: number
+  articleName: string
+  quantity: number
+  unitPrice: number
+  total: number
+}
+
+export interface ResumenVenta {
+  id: number
+  total: number
+  paymentMethod: PaymentMethod
+  createdAt: string
+  items: ResumenVentaItem[]
+}
+
 export interface ResumenAccion {
   id: number
   action: AuditAction
@@ -24,6 +43,7 @@ export interface ResumenAccion {
 
 export interface TurnoResumen {
   ventas: ResumenVentas
+  ventasDetalle: ResumenVenta[]
   acciones: ResumenAccion[]
   accionesCount: number
 }

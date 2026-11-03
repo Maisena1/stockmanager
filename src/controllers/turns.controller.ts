@@ -6,7 +6,25 @@ const userSelect = { select: { id: true, username: true, role: true } };
 
 async function resumenFor(userId: number, from: Date, to: Date): Promise<TurnoResumen> {
   const [ventas, acciones] = await Promise.all([
-    prisma.sale.findMany({ where: { userId, createdAt: { gte: from, lte: to } } }),
+    prisma.sale.findMany({
+      where: { userId, createdAt: { gte: from, lte: to } },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        total: true,
+        paymentMethod: true,
+        createdAt: true,
+        items: {
+          select: {
+            id: true,
+            articleName: true,
+            quantity: true,
+            unitPrice: true,
+            total: true,
+          },
+        },
+      },
+    }),
     prisma.auditLog.findMany({
       where: { userId, createdAt: { gte: from, lte: to } },
       orderBy: { createdAt: "asc" },

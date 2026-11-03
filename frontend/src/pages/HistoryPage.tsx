@@ -5,6 +5,7 @@ import {
   listSales,
   type Balance,
   type DateRange,
+  type PaymentMethod,
   type Sale,
 } from "../lib/sales"
 
@@ -33,6 +34,7 @@ export default function HistoryPage() {
   const initial = todayLocal()
   const [from, setFrom] = useState(initial)
   const [to, setTo] = useState(initial)
+  const [payment, setPayment] = useState<PaymentMethod | "">("")
   const [applied, setApplied] = useState<DateRange>({ from: initial, to: initial })
   const [sales, setSales] = useState<Sale[]>([])
   const [balance, setBalance] = useState<Balance | null>(null)
@@ -66,12 +68,17 @@ export default function HistoryPage() {
     setLoading(true)
     setError(null)
     setExpanded(null)
-    setApplied({ from: from || undefined, to: to || undefined })
+    setApplied({
+      from: from || undefined,
+      to: to || undefined,
+      paymentMethod: payment || undefined,
+    })
   }
 
   function clearFilters() {
     setFrom("")
     setTo("")
+    setPayment("")
     setLoading(true)
     setError(null)
     setExpanded(null)
@@ -100,6 +107,21 @@ export default function HistoryPage() {
             onChange={(e) => setTo(e.target.value)}
             className="ml-2 rounded border border-gray-300 px-3 py-2 text-sm"
           />
+        </label>
+        <label className="text-sm">
+          Pago
+          <select
+            value={payment}
+            onChange={(e) => setPayment(e.target.value as PaymentMethod | "")}
+            className="ml-2 rounded border border-gray-300 px-3 py-2 text-sm"
+          >
+            <option value="">Todos</option>
+            {PAYMENT_ORDER.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
         </label>
         <button
           type="button"

@@ -3,8 +3,12 @@ import { buildResumen, ensureTurnoAbierto, type ResumenAccion } from "./turnos";
 
 const hoy = new Date();
 
-function venta(total: number, paymentMethod: string) {
-  return { total, paymentMethod, createdAt: hoy };
+function venta(
+  total: number,
+  paymentMethod: string,
+  items: Array<{ id: number; articleName: string; quantity: number; unitPrice: number; total: number }> = [],
+) {
+  return { id: items[0]?.id ?? 1, total, paymentMethod, createdAt: hoy, items };
 }
 
 function accion(id: number, detail: string): ResumenAccion {
@@ -22,6 +26,21 @@ describe("buildResumen", () => {
     expect(resumen.ventas.total).toBe(57000);
     expect(resumen.ventas.byPayment.EFECTIVO).toEqual({ count: 2, total: 12000 });
     expect(resumen.ventas.byPayment.TARJETA).toEqual({ count: 1, total: 45000 });
+  });
+
+  it("deja el detalle de cada venta con sus ítems para el modal", () => {
+    const items = [
+      { id: 1, articleName: "Filtro", quantity: 2, unitPrice: 2000, total: 4000 },
+    ];
+    const resumen = buildResumen([venta(4000, "EFECTIVO", items)], []);
+
+    expect(resumen.ventasDetalle).toHaveLength(1);
+    expect(resumen.ventasDetalle[0]).toMatchObject({
+      id: 1,
+      total: 4000,
+      paymentMethod: "EFECTIVO",
+      items,
+    });
   });
 
   it("incluye las acciones del audit log dentro de la ventana", () => {

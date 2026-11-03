@@ -4,6 +4,7 @@ import { PaymentMethod } from "../generated/prisma/client";
 import { serializeArticle } from "../utils/serialize";
 import { parseLocalDate, endOfLocalDay } from "../utils/balance";
 import { logAudit, formatDetailMoney } from "../lib/audit";
+import { ensureTurnoAbierto } from "../lib/turnos";
 import { lowStockWhere } from "../lib/lowStock";
 
 
@@ -76,6 +77,10 @@ export async function createSale(req: Request, res: Response) {
   }
 
   const sale = await prisma.$transaction(async (tx) => {
+    // Aunque el turno quedó cerrado, la venta siempre tiene a qué turno
+    // pertenecer: si no hay uno abierto, se abre automáticamente (RF-63).
+    await ensureTurnoAbierto(tx, userId);
+
     const created = await tx.sale.create({
       data: {
         userId,
@@ -119,11 +124,23 @@ export async function createSale(req: Request, res: Response) {
 export async function listSales(req: Request, res: Response) {
  const role = req.user!.role;
  const userId = req.user!.userId;
- const { from, to } = req.query;
+ const { from, to, paymentMethod } = req.query;
  
  const where:Record<string, unknown> = {};
  if (role === "EMPLOYEE") {
   where.userId = userId;
+ }
+ if (
+  typeof paymentMethod === "string" &&
+  paymentMethod &&
+  !Object.values(PaymentMethod).includes(paymentMethod as PaymentMethod)
+ ) {
+  return res.status(400).json({
+   error: "paymentMethod debe ser EFECTIVO, TARJETA o TRANSFERENCIA",
+  });
+ }
+ if (typeof paymentMethod === "string" && paymentMethod) {
+  where.paymentMethod = paymentMethod;
  }
  if (typeof from === "string" && from) {
   const parsed = parseLocalDate(from);

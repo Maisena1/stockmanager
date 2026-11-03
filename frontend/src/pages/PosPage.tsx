@@ -42,6 +42,7 @@ export default function PosPage() {
   const [page, setPage] = useState(1)
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([])
   const [results, setResults] = useState<Article[]>([])
+  const [loadingArticles, setLoadingArticles] = useState(false)
   const [cart, setCart] = useState<CartLine[]>([])
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -64,21 +65,29 @@ export default function PosPage() {
 
   useEffect(() => {
     const text = debouncedQuery.trim()
-    if (!text && !supplierId) {
-      setResults([])
-      return
-    }
+    let cancelled = false
+    setLoadingArticles(true)
+    // El buscador pagina igual con o sin proveedor: si no hay proveedor,
+    // se pagina también sobre el listado completo (búsqueda general).
     const params = new URLSearchParams()
     if (text) params.set("q", text)
     if (supplierId) params.set("supplierId", supplierId)
-    // El buscador del POS pagina en el backend: 15 artículos por página,
-    // nunca la tabla completa del proveedor.
     params.set("take", String(PAGE_SIZE))
     params.set("page", String(page))
     api
       .get<Article[]>(`/articles?${params.toString()}`)
-      .then((data) => setResults(data))
-      .catch(() => setResults([]))
+      .then((data) => {
+        if (!cancelled) setResults(data)
+      })
+      .catch(() => {
+        if (!cancelled) setResults([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingArticles(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [debouncedQuery, supplierId, page])
 
   useEffect(() => {
@@ -211,11 +220,13 @@ export default function PosPage() {
           />
         </div>
         <div className="flex-1 overflow-y-auto">
-          {results.length === 0 ? (
+          {loadingArticles ? (
+            <p className="p-4 text-sm text-gray-500">Buscando artículos…</p>
+          ) : results.length === 0 ? (
             <p className="p-4 text-sm text-gray-500">
               {debouncedQuery.trim() || supplierId
                 ? "Sin resultados"
-                : "Escribí o elegí un proveedor para buscar artículos"}
+                : "Todavía no hay artículos registrados"}
             </p>
           ) : (
             <ul>
@@ -244,28 +255,26 @@ export default function PosPage() {
             </ul>
           )}
         </div>
-        {(debouncedQuery.trim() || supplierId) && (
-          <div className="flex items-center justify-between border-t border-gray-200 px-3 py-2 text-sm text-gray-600">
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="rounded border border-gray-300 px-2 py-1 text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              ‹ Anterior
-            </button>
-            <span>Página {page}</span>
-            {/* Si la página no viene completa es que no hay más resultados. */}
-            <button
-              type="button"
-              onClick={() => setPage((p) => p + 1)}
-              disabled={results.length < PAGE_SIZE}
-              className="rounded border border-gray-300 px-2 py-1 text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Siguiente ›
-            </button>
-          </div>
-        )}
+        <div className="flex items-center justify-between border-t border-gray-200 px-3 py-2 text-sm text-gray-600">
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="rounded border border-gray-300 px-2 py-1 text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            ‹ Anterior
+          </button>
+          <span>Página {page}</span>
+          {/* Si la página no viene completa es que no hay más resultados. */}
+          <button
+            type="button"
+            onClick={() => setPage((p) => p + 1)}
+            disabled={results.length < PAGE_SIZE}
+            className="rounded border border-gray-300 px-2 py-1 text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Siguiente ›
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col rounded-lg border border-gray-200 bg-white shadow-sm">
